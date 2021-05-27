@@ -29,7 +29,7 @@ def undivided_differences_1d(input_data, order, nghosts, bias=BIAS_NONE):
 	loffsets = np.zeros(N,dtype=int)  #this is called r in the DeLENO paper
 	start = 1 if bias==BIAS_NONE else 2
 	if bias==BIAS_LEFT:
-		loffsets+=1 
+		loffsets += 1 
 
 	for k in range(start,order):
 		for i in range(N):
