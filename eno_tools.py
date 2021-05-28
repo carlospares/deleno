@@ -10,17 +10,17 @@ BIAS_NONE = 0
 # 		self.scratch = np.zeros(options.N)
 
 # 	
-def undivided_differences_1d(input_data, order, nghosts, bias=BIAS_NONE):
-	# input_data: 1d array of N physical cells + 2*nghosts ghost cells
+def undivided_differences_1d(input_data, order, grid, bias=BIAS_NONE):
+	# input_data: 1d array of N physical cells + 2*grid.gw ghost cells
 	# order: up to which udd to consider (must agree with order of ENO rec/interp)
-	# nghosts: number of ghost cells
+	# grid: grid (from which to deduce number of ghost cells needed)
 	# bias: if BIAS_NONE, start with cell i. If BIAS_RIGHT, start with stencil {i, i+1}. 
 	#		If BIAS_LEFT, start with {i-1,i}.
 
 	if bias not in [BIAS_LEFT, BIAS_NONE, BIAS_RIGHT]:
 		raise Exception("Bias must be one of BIAS_LEFT, BIAS_NONE, BIAS_RIGHT")
 
-	N = len(input_data) - 2*nghosts
+	N = len(input_data) - 2*grid.gw
 	udd = np.zeros([order, len(input_data)] ) # we iteratively produce undivided diffs
 	udd[0,:] = input_data
 	for k in range(1,order):
@@ -33,6 +33,6 @@ def undivided_differences_1d(input_data, order, nghosts, bias=BIAS_NONE):
 
 	for k in range(start,order):
 		for i in range(N):
-			if abs(udd[k, i+nghosts-loffsets[i]]) > abs(udd[k, i+nghosts-loffsets[i]-1]):
+			if abs(udd[k, i+grid.gw-loffsets[i]]) > abs(udd[k, i+grid.gw-loffsets[i]-1]):
 				loffsets[i] += 1
 	return loffsets

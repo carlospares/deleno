@@ -7,16 +7,22 @@ class BoundaryCondition:
 
 	BC_PER = 'P'
 
-	def __init__(self, bcs):
-		self.bcN = bcs[0]
-		self.bcS = bcs[1]
-		self.bcW = bcs[2]
-		self.bcE = bcs[3]
+	def __init__(self, bcs=None):
+		if bcs is None:
+			self.bcN = self.BC_PER
+			self.bcS = self.BC_PER
+			self.bcE = self.BC_PER
+			self.bcW = self.BC_PER
+		else:
+			self.bcN = bcs[0]
+			self.bcS = bcs[1]
+			self.bcW = bcs[2]
+			self.bcE = bcs[3]
 
-		# ^ is XOR. For each axis, either both are P or none is.
-		if ((self.bcN == self.BC_PER) ^ (self.bcS == self.BC_PER)) or \
-				((self.bcE == self.BC_PER) ^ (self.bcW == self.BC_PER)):
-			raise Exception("One-sided periodic BCs are not allowed")
+			# ^ is XOR. For each axis, either both are P or none is.
+			if ((self.bcN == self.BC_PER) ^ (self.bcS == self.BC_PER)) or \
+					((self.bcE == self.BC_PER) ^ (self.bcW == self.BC_PER)):
+				raise Exception("One-sided periodic BCs are not allowed")
 
 	def apply_bc_1d(self, data, nghosts, direction=AXIS_NS):
 		# overwrites ghost cells in data with appropriate values

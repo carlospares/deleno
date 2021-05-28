@@ -1,5 +1,4 @@
 import argparse
-from boundary_condition import BoundaryCondition as BC
 
 class Options:
 
@@ -22,5 +21,5 @@ class Options:
 		if self.minN >= self.maxN:
 			raise Exception("minN >= maxN, no details can be computed!")
 		self.order = args.order
-		self.bcs = BC(args.bc)
+		self.bcs = args.bc
 		return
