@@ -8,5 +8,5 @@ from grid import Grid
 
 options = Options() # parse command line
 data = dh.load_npy(options.name)
-grid = Grid(datashape=data.shape, nghosts=options.order-1, options=options)
+grid = Grid(datashape=data.shape, nghosts=options.order, options=options)
 dh.quick_plot(data[1])

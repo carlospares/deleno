@@ -16,7 +16,7 @@ class TestUndividedStencil(unittest.TestCase):
 		BC = BoundaryCondition()
 		grid = Grid((5,5), gw)
 		wBC = BC.extend_with_bc_1d(data, grid.gw)
-		np.testing.assert_array_equal(eno.undivided_differences_1d(wBC, 3, grid), [0,1,0,1,2])
+		np.testing.assert_array_equal(eno.undivided_differences_1d(wBC, p, grid), [0,1,0,1,2])
 
 	def test_biases(self):
 		"""
