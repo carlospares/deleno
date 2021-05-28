@@ -1,4 +1,6 @@
 __pycache__
+testall
 *.npy
 *.sublime-project
 *.sublime-workspace
+*.pyc

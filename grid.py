@@ -2,12 +2,15 @@ import numpy as np
 from boundary_condition import BoundaryCondition as BC
 
 class Grid:
-	def __init__(self, datashape, nghosts, options=None):
+	def __init__(self, datashape, nghosts, options=None, limits=[0., 1., 0., 1.]):
+		# initializes a grid with basic information
+		# 
+
 		# domain limits
-		self.xmin = 0.
-		self.xmax = 1.
-		self.ymin = 0.
-		self.ymax = 1.
+		self.xmin = limits[0]
+		self.xmax = limits[1]
+		self.ymin = limits[2]
+		self.ymax = limits[3]
 
 		# nx : #rows (ie number of cells in y axis), NS axis, i in range(nx)
 		# ny : #cols (ie number of cells in x axis), EW axis, j in range(ny)
@@ -19,8 +22,7 @@ class Grid:
 			self.nx = datashape[0]
 			self.ny = datashape[1]
 		self.gw = nghosts
-		if options is None:
-			self.bcs = BC() if options is None else BC(options.bcs)
+		self.bcs = BC() if options is None else BC(options.bcs)
 		self.generate_params()
 
 	def generate_params(self):
