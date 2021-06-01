@@ -32,10 +32,6 @@ class Grid:
         self.nyg = self.ny + 2*self.gw
         self.dx = (self.xmax-self.xmin)/self.nx
         self.dy = (self.ymax-self.ymin)/self.ny
-
-        # cell centers
-        self.xc = self.dx/2. + self.dx*np.arange(self.nx)
-        self.yc = self.dy/2. + self.dy*np.arange(self.ny)
         
         # cell interfaces (left/bottom):
         self.x = self.dx*np.arange(self.nx)

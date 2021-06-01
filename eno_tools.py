@@ -176,14 +176,14 @@ def interpolate_2d_decimator_staggered(input_data, order, grid, component=COMP_H
         due to staggering.
     """
     gw = grid.gw
-    if grid.nx % 2 == 1 or grid.ny % 2 == 1:
+    if grid.nx % 2 != 0 or grid.ny % 2 != 0:
         raise Exception("Decimator will not work on meshes with odd dimensions!")
-    coarse = np.zeros((grid.nx/2,grid.ny/2))
+    coarse = np.zeros((int(grid.nx/2),int(grid.ny/2)))
 
     if component==COMP_HOR:
         for i in range(0,grid.nx,2):
-            coarse[i/2,:] = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)[0::2]
+            coarse[int(i/2),:] = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)[0::2]
     else: # vertical component
         for j in range(0,grid.ny,2):
-            coarse[:,j/2] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
+            coarse[:,int(j/2)] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
     return coarse
