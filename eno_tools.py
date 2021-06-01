@@ -33,21 +33,24 @@ ENO9_INTERP_COEF = np.array([[0.196380615234375,1.571044921875,-1.8328857421875,
                                 [-0.013092041015625,0.120849609375,-0.4998779296875,1.221923828125,-1.96380615234375,2.199462890625,-1.8328857421875,1.571044921875,0.196380615234375],  
                                 [0.196380615234375,-1.780517578125,7.1905517578125,-16.995849609375,25.96588134765625,-26.707763671875,18.695434570312496,-8.902587890625,3.338470458984375]])
 
-def undivided_differences_1d(input_data, order, grid, bias=BIAS_NONE):
+def undivided_differences_1d(input_data, order, grid, bias=BIAS_NONE, include_left=False):
     """
         Returns an array with the left stencils (in {0, ,.., order-1}) for ENO interpolation, 
-        selected with undivided differences 
+        selected with undivided differences, computed for all non-ghost cells
 
-        input_data: 1d array of N physical cells + 2*grid.gw ghost cells
-        order: up to which udd to consider (must agree with order of ENO rec/interp)
-        grid: grid (from which to deduce number of ghost cells needed)
-        bias: if BIAS_NONE, start with cell i. If BIAS_RIGHT, start with stencil {i, i+1}.
+        input_data:   1d array of N physical cells + 2*grid.gw ghost cells
+        order:        up to which udd to consider (must agree with order of ENO rec/interp)
+        grid:         grid (from which to deduce number of ghost cells needed)
+        bias:         if BIAS_NONE, start with cell i. If BIAS_RIGHT, start with stencil {i, i+1}.
+        include_left: if True, return an (N+1)-array which has in [0] the undivided difference for
+                      the last left ghost cells 
     """
 
     if bias not in [BIAS_NONE, BIAS_RIGHT]:
         raise Exception("Bias must be one of BIAS_NONE, BIAS_RIGHT")
 
-    N = len(input_data) - 2*grid.gw
+    N = len(input_data) - 2*grid.gw + (1 if include_left else 0)
+    gw_l = grid.gw-1 if include_left else grid.gw
     udd = np.zeros([order, len(input_data)] ) # we iteratively produce undivided diffs
     udd[0,:] = input_data
     for k in range(1,order):
@@ -58,11 +61,11 @@ def undivided_differences_1d(input_data, order, grid, bias=BIAS_NONE):
 
     for k in range(start,order):
         for i in range(N):
-            if abs(udd[k, i+grid.gw-loffsets[i]]) > abs(udd[k, i+grid.gw-loffsets[i]-1]):
+            if abs(udd[k, i+gw_l-loffsets[i]]) > abs(udd[k, i+gw_l-loffsets[i]-1]):
                 loffsets[i] += 1
     return loffsets
 
-def interpolate_1d(input_data, order, grid, bias=BIAS_NONE):
+def interpolate_1d(input_data, order, grid, bias=BIAS_NONE, include_left=False):
     """ returns ENO interpolations a half mesh-step to the right (no ghost cells)
 
         input_data: 1d array of N physical cells + 2*grid.gw ghost cells
@@ -81,12 +84,13 @@ def interpolate_1d(input_data, order, grid, bias=BIAS_NONE):
     else:
         raise Exception("ENO interpolation not implemented for order {}".format(order))
 
-    loffsets = undivided_differences_1d(input_data, order, grid, bias)
-    N = len(input_data)-2*grid.gw
+    loffsets = undivided_differences_1d(input_data, order, grid, bias, include_left)
+    N = len(input_data)-2*grid.gw + (1 if include_left else 0)
+    gw_l = grid.gw-1 if include_left else grid.gw
     enorecs = np.zeros(N)
     for i in range(N):
         lshift = loffsets[i]
-        start = i+grid.gw-lshift
+        start = i+gw_l-lshift
         enorecs[i] = np.dot(c[lshift], input_data[start : start+order])
     return enorecs
 
@@ -117,28 +121,69 @@ def interpolate_2d_predictor_staggered(input_data, order, grid, component=COMP_H
     if component == COMP_HOR:
         end_across = grid.ny
         end_along = grid.nx
+        axis_across = grid.bcs.AXIS_NS
+        axis_along = grid.bcs.AXIS_EW
     elif component == COMP_VERT:
-        raise Exception("COMP_VERT NOT YET IMPLEMENTED")
         end_across = grid.nx
         end_along = grid.ny
+        axis_across = grid.bcs.AXIS_EW
+        axis_along = grid.bcs.AXIS_NS
 
     midgrid = np.zeros(2*end_across + 2*gw)
-
     for i in range(end_along):
         # intermediate step: interpolate at +0.5 mesh step
-        midpoints = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)
+        if component == COMP_HOR:
+            in_data = input_data[i+gw,:]
+        else: # vertical component
+            in_data = input_data[:,i+gw]
+        midpoints = interpolate_1d(in_data, order, grid, bias=BIAS_RIGHT, include_left=True)
 
-        # THIS ASSUMES PERIODIC!
-        midgrid[gw] = midpoints[-1]
-        midgrid[(gw+2):(gw+2*end_across):2] = midpoints[0:-1]
-        midgrid[(gw+1):(gw+2*end_across):2] = input_data[i+gw,gw:-gw]
-        grid.bcs.apply_bc_1d(midgrid, gw, grid.bcs.AXIS_NS)
+        midgrid[gw:(gw+2*end_across):2] = midpoints[0:-1]
+        # we ignored the last element here ^ since this is an intermediate step for a right-biased
+        # interpolation (if periodic, should coincide with the first)
+        midgrid[(gw+1):(gw+2*end_across):2] = in_data[gw:-gw]
+        grid.bcs.apply_bc_1d(midgrid, gw, axis_across)
 
-        fine[2*i,:] =  interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
+        if component == COMP_HOR:
+            fine[2*i,:] =  interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
+        else: # vertical component
+            fine[:, 2*i] =  interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
 
     midgrid = np.zeros(end_along + 2*gw)
-    for j in range(2*end_across):
-        midgrid[gw:-gw] = fine[0::2, j] 
-        grid.bcs.apply_bc_1d(midgrid, gw, grid.bcs.AXIS_EW)
-        fine[1:(2*end_along):2, j] = interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
+    if component == COMP_HOR:
+        for j in range(2*end_across):
+            midgrid[gw:-gw] = fine[0::2, j] 
+            grid.bcs.apply_bc_1d(midgrid, gw, axis_along)
+            fine[1:(2*end_along):2, j] = interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
+    else: # vertical component
+        for j in range(2*end_across):
+            midgrid[gw:-gw] = fine[j, 0::2] 
+            grid.bcs.apply_bc_1d(midgrid, gw, axis_along)
+            fine[j, 1:(2*end_along):2] = interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
+
     return fine
+
+def interpolate_2d_decimator_staggered(input_data, order, grid, component=COMP_HOR):
+    """
+        Receives
+        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with one component of velocity (staggered as in Arakawa-C)
+        component: COMP_HOR for u, COMP_VERT for v
+
+        Returns
+        a 2d, (grid.nx/2) x (grid.ny/2) array, ie with no ghost cells, containing the downscaling 
+        with ENO<order> of input_data to the coarser grid. Note that this is non-trivial
+        due to staggering.
+    """
+    gw = grid.gw
+    if grid.nx % 2 == 1 or grid.ny % 2 == 1:
+        raise Exception("Decimator will not work on meshes with odd dimensions!")
+    coarse = np.zeros((grid.nx/2,grid.ny/2))
+
+    if component==COMP_HOR:
+        for i in range(0,grid.nx,2):
+            coarse[i/2,:] = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)[0::2]
+    else: # vertical component
+        for j in range(0,grid.ny,2):
+            coarse[:,j/2] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
+    return coarse

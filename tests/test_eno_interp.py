@@ -71,29 +71,65 @@ class TestEnoInterpolation(unittest.TestCase):
             eoc = -(np.log(errors[1]) - np.log(errors[0]) )/np.log(2)
             np.testing.assert_almost_equal(eoc, p, decimal=1)
 
-    def test_eno_2d(self):
+    def test_eno_2d_staggered_predictor(self):
         """
-        Test 2d ENO interpolation
+        Test 2d ENO interpolation (Arakawa-C) for upscaling
         """
         f = lambda x,y : np.sin(2*np.pi*x)*np.cos(2*np.pi*y)
-        for p in [3,5,7,9]:
-            gw = p
-            errors = []
-            for N in [64, 128]:
-                grid = Grid((N,N), gw)
-                X,Y = np.meshgrid(grid.x, grid.y + 0.5*grid.dy)
-                data = f(X,Y).T
-                wBC = grid.bcs.extend_with_bc_2d(data, grid.gw)
-                interp = eno.interpolate_2d_predictor_staggered(wBC, p, grid)
+        for comp in [eno.COMP_HOR, eno.COMP_VERT]:
+            for p in [3,5,7,9]:
+                gw = p
+                errors = []
+                for N in [64, 128]:
+                    grid = Grid((N,N), gw)
+                    if comp == eno.COMP_HOR:
+                        X,Y = np.meshgrid(grid.x, grid.y + 0.5*grid.dy)
+                    else:
+                        X,Y = np.meshgrid(grid.x + 0.5*grid.dx, grid.y)
+                    data = f(X,Y).T
+                    wBC = grid.bcs.extend_with_bc_2d(data, grid.gw)
+                    interp = eno.interpolate_2d_predictor_staggered(wBC, p, grid, component=comp)
 
-                fine_grid = Grid((2*N, 2*N), gw)
-                Xf, Yf = np.meshgrid(fine_grid.x, fine_grid.y + 0.5*fine_grid.dy)
-                fine_data = f(Xf,Yf).T
-                errors.append(np.sum(np.abs(fine_data - interp))/N/N)
+                    fine_grid = Grid((2*N, 2*N), gw)
+                    if comp == eno.COMP_HOR:
+                        Xf, Yf = np.meshgrid(fine_grid.x, fine_grid.y + 0.5*fine_grid.dy)
+                    else:
+                        Xf, Yf = np.meshgrid(fine_grid.x + 0.5*fine_grid.dx, fine_grid.y)
+                    fine_data = f(Xf,Yf).T
+                    errors.append(np.sum(np.abs(fine_data - interp))/N/N)
 
-            eoc = -(np.log(errors[1]) - np.log(errors[0]) )/np.log(2)
-            np.testing.assert_almost_equal(eoc, p, decimal=1)
+                eoc = -(np.log(errors[1]) - np.log(errors[0]) )/np.log(2)
+                np.testing.assert_almost_equal(eoc, p, decimal=1)
 
+    def test_eno_2d_staggered_decimator(self):
+        """
+        Test 2d ENO interpolation (Arakawa-C) for downscaling
+        """
+        f = lambda x,y : np.sin(2*np.pi*x)*np.cos(2*np.pi*y)
+        for comp in [eno.COMP_HOR, eno.COMP_VERT]:
+            for p in [3,5,7,9]:
+                gw = p
+                errors = []
+                for N in [64, 128]:
+                    grid = Grid((N,N), gw)
+                    if comp == eno.COMP_HOR:
+                        X,Y = np.meshgrid(grid.x, grid.y + 0.5*grid.dy)
+                    else:
+                        X,Y = np.meshgrid(grid.x + 0.5*grid.dx, grid.y)
+                    data = f(X,Y).T
+                    wBC = grid.bcs.extend_with_bc_2d(data, grid.gw)
+                    interp = eno.interpolate_2d_decimator_staggered(wBC, p, grid, component=comp)
+
+                    coarse_grid = Grid((N/2, N/2), gw)
+                    if comp == eno.COMP_HOR:
+                        Xc, Yc = np.meshgrid(coarse_grid.x, coarse_grid.y + 0.5*coarse_grid.dy)
+                    else:
+                        Xc, Yc = np.meshgrid(coarse_grid.x + 0.5*coarse_grid.dx, coarse_grid.y)
+                    coarse_data = f(Xc,Yc).T
+                    errors.append(np.sum(np.abs(coarse_data - interp))/N/N)
+
+                eoc = -(np.log(errors[1]) - np.log(errors[0]) )/np.log(2)
+                np.testing.assert_almost_equal(eoc, p, decimal=1)
 
 if __name__ == '__main__':
     unittest.main()
