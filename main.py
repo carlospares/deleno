@@ -3,17 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from options import Options
 import data_handler as dh
-#import eno_tools as eno
-#from grid import Grid
 from encoding import compressed_encoding_staggered
+from decoding import compressed_decoding_staggered
 
 options = Options() # parse command line
 f0, dhats = compressed_encoding_staggered(options)
 
-print([np.sum(np.abs(d)) for d in dhats])
-dh.quick_plot(f0)
+decoded = compressed_decoding_staggered(f0, dhats, options)
+
+dh.quick_plot_compare(dh.load_npy(options.name)[0], decoded)
 
 
-#data = dh.load_npy(options.name)
-#grid = Grid(datashape=data.shape, nghosts=options.order, options=options)
-#dh.quick_plot(data[1])
+# print([np.sum(np.abs(d)) for d in dhats])

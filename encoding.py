@@ -4,19 +4,19 @@ import data_handler as dh
 from grid import Grid
 
 def truncate(arr_data, threshold):
+    num_clipped = 0
     for i in range(arr_data.shape[0]):
         for j in range(arr_data.shape[1]):
             if abs(arr_data[i,j]) < threshold:
                 arr_data[i,j] = 0
+                num_clipped += 1
+    return num_clipped
 
 def idiv_tuple(t, d):
     # integer-divide all elements in t by d
     return tuple(int(e/d) for e in t)
 
-def compressed_encoding_staggered(options):
-    eps=0.
-    t=1.
-    print("TODO: fix epsilon and t to proper values!!")
+def compressed_encoding_staggered(options, eps=0.5, t=0.2):
     fK = dh.load_npy(options.name)[0]
     K = int(round(np.log2(options.maxN/options.minN)))
     gw = options.order
@@ -49,8 +49,10 @@ def compressed_encoding_staggered(options):
                                 gw)
 
         d = f_u[k] - ftilde_u[k]
-        truncate(d, eps*(t ** (K-k)))
+        compression = truncate(d, eps*(t ** (K-k)))
+        Nfine = grid_fine.nxg*grid_fine.nyg
+        print(f"Compression rate: {compression*100./Nfine}% ({compression}/{Nfine})")
         dhat_u[k] = d
         fhat_u[k] = ftilde_u[k] + dhat_u[k]
 
-    return (f_u[0], dhat_u)
+    return (f_u[0], dhat_u[1:]) # dhat_u[0] is 0

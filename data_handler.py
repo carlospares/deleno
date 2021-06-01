@@ -15,6 +15,10 @@ def quick_plot(data):
     plt.show()
 
 def quick_plot_compare(data1, data2):
+    # assumes both data are the same size
+    v = data1.shape[0]*data1.shape[1]
+    errorL1 = np.sum(np.abs(data1-data2))/v
+    print(f"Asumming [0,1]^2, difference in L1 is {errorL1}")
     plt.subplot(311)
     plt.contourf(data1, 20)
     plt.colorbar()
