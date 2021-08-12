@@ -14,12 +14,27 @@ class Options:
                                 help='Type of BCs (default: periodic), in order N,S,W,E')
         parser.add_argument('-o', '--order', type=int, default=3,
                                 help='Order of reconstruction/interpolation')
+        parser.add_argument('-c', '--compare', action='store_true', default=False,
+                                help="Compare decimator to real samples")
+        parser.add_argument('-v', '--verbose', action='store_true', default=False,
+                                help='Enable more detailed output (default=false)')
+        parser.add_argument('-eps', '--epsilon', type=float, default=0.,
+                                help='Threshold for compression')
         args = parser.parse_args()
         self.name = args.name
         self.minN = args.minN
         self.maxN = args.maxN
-        if self.minN >= self.maxN:
-            raise Exception("minN >= maxN, no details can be computed!")
         self.order = args.order
         self.bcs = args.bc
+        self.compare = args.compare
+        self.verbose = args.verbose
+        self.epsilon = args.epsilon
+
+        self.gw = self.order
+
+        # some basic sanity checks
+        if self.minN >= self.maxN:
+            raise Exception("minN >= maxN, no details can be computed!")
+        if self.epsilon <= 0:
+            print("Epsilon is not positive; data will not be compressed. Is this what you want?")
         return

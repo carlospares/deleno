@@ -16,10 +16,17 @@ def idiv_tuple(t, d):
     # integer-divide all elements in t by d
     return tuple(int(e/d) for e in t)
 
-def compressed_encoding_staggered(options, eps=0.5, t=0.2):
-    fK = dh.load_npy(options.name)[0]
+# def compress_one_step_staggered(f_u, options, t=0.2):
+#     gw = options.gw
+#     grid_fine = Grid(f_u.shape , gw)
+#     grid_coarse = Grid(idiv_tuple(f_u.shape, 2) , gw)
+# I don't think this makes a lot of sense; keeping around for now 
+
+
+def compressed_encoding_staggered(options, t=0.2):
+    fK = dh.load_data(options.name)[0]
     K = int(round(np.log2(options.maxN/options.minN)))
-    gw = options.order
+    gw = options.gw
     
     f_u = [ [] for i in range(K+1)]
     fhat_u = [ [] for i in range(K+1)]
@@ -49,10 +56,14 @@ def compressed_encoding_staggered(options, eps=0.5, t=0.2):
                                 gw)
 
         d = f_u[k] - ftilde_u[k]
-        compression = truncate(d, eps*(t ** (K-k)))
+        compression = truncate(d, options.epsilon*(t ** (K-k)))
         Nfine = grid_fine.nxg*grid_fine.nyg
-        print(f"Compression rate: {compression*100./Nfine}% ({compression}/{Nfine})")
+        if options.verbose:
+            print(f"Compression rate: {compression*100./Nfine}% ({compression}/{Nfine})")
         dhat_u[k] = d
         fhat_u[k] = ftilde_u[k] + dhat_u[k]
 
-    return (f_u[0], dhat_u[1:]) # dhat_u[0] is 0
+    if options.compare:
+        return (f_u, dhat_u[1:])
+    else:
+        return (f_u[0], dhat_u[1:]) # dhat_u[0] is 0

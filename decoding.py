@@ -4,7 +4,7 @@ from grid import Grid
 
 def compressed_decoding_staggered(f0, d, options):
     bc = BoundaryCondition(options.bcs)
-    gw = options.order
+    gw = options.gw
     N0 = options.minN
     if f0.shape == (N0, N0): # ghost cells not included
         fhat_old = bc.extend_with_bc_2d(f0, gw)

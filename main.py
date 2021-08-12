@@ -9,9 +9,15 @@ from decoding import compressed_decoding_staggered
 options = Options() # parse command line
 f0, dhats = compressed_encoding_staggered(options)
 
-decoded = compressed_decoding_staggered(f0, dhats, options)
+# details_L1size = []
+# for k, d in enumerate(dhats):
+#     # dh.quick_plot(d)
+#     details_L1size.append(np.sum(np.abs(d))/ ((options.minN*(2**(k+1))))**2 )
+# print(options.name)
+# dh.quick_conv_plot(details_L1size, options)
 
-dh.quick_plot_compare(dh.load_npy(options.name)[0], decoded)
+if options.compare:
+    dists = dh.compare_to_real(f0, options)
+    dh.quick_conv_plot(dists, options)
 
-
-# print([np.sum(np.abs(d)) for d in dhats])
+# decoded = compressed_decoding_staggered(f0, dhats, options)
