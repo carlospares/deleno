@@ -33,6 +33,41 @@ ENO9_INTERP_COEF = np.array([[0.196380615234375,1.571044921875,-1.8328857421875,
                                 [-0.013092041015625,0.120849609375,-0.4998779296875,1.221923828125,-1.96380615234375,2.199462890625,-1.8328857421875,1.571044921875,0.196380615234375],  
                                 [0.196380615234375,-1.780517578125,7.1905517578125,-16.995849609375,25.96588134765625,-26.707763671875,18.695434570312496,-8.902587890625,3.338470458984375]])
 
+# I can't find a source for these, so I have derived them myself
+# see scripts/FV_coefs_upscale.m
+ENO3_AVG_UPSCALE_COEF_L = np.array([ [ 1.375, -0.5, 0.125 ],
+                                    [0.125, 1, -0.125], 
+                                    [-0.125, 0.5, 0.625] ])
+ENO3_AVG_UPSCALE_COEF_R = np.array([ [0.625, 0.5, -0.125],
+                                     [-0.125, 1, 0.125],
+                                     [0.125, -0.5, 1.375] ])
+ENO5_AVG_UPSCALE_COEF_L = np.array([[1.5078125,-0.953125,0.6875,-0.296875,0.0546875],
+                                    [0.0546875,1.234375,-0.40625,0.140625,-0.0234375],
+                                    [-0.0234375,0.171875,1,-0.171875,0.0234375],
+                                    [0.0234375,-0.140625,0.40625,0.765625,-0.0546875],
+                                    [-0.0546875,0.296875,-0.6875,0.953125,0.4921875]])
+ENO5_AVG_UPSCALE_COEF_R = np.array([[0.4921875,0.953125,-0.6875,0.296875,-0.0546875],
+                                    [-0.0546875,0.765625,0.40625,-0.140625,0.0234375],
+                                    [0.0234375,-0.171875,1,0.171875,-0.0234375],
+                                    [-0.0234375,0.140625,-0.40625,1.234375,0.0546875],
+                                    [0.0546875,-0.296875,0.6875,-0.953125,1.5078125]])
+ENO7_AVG_UPSCALE_COEF_L = np.array([[1.5810546875,-1.3515625,1.5810546875,-1.3515625,0.7431640625,-0.234375,0.0322265625],
+                                    [0.0322265625,1.35546875,-0.6748046875,0.453125,-0.2236328125,0.06640625,-0.0087890625],
+                                    [-0.0087890625,0.09375,1.1708984375,-0.3671875,0.1455078125,-0.0390625,0.0048828125],
+                                    [0.0048828125,-0.04296875,0.1962890625,1,-0.1962890625,0.04296875,-0.0048828125],
+                                    [-0.0048828125,0.0390625,-0.1455078125,0.3671875,0.8291015625,-0.09375,0.0087890625],
+                                    [0.0087890625,-0.06640625,0.2236328125,-0.453125,0.6748046875,0.64453125,-0.0322265625],
+                                    [-0.0322265625,0.234375,-0.7431640625,1.3515625,-1.5810546875,1.3515625,0.4189453125]])
+ENO7_AVG_UPSCALE_COEF_R = np.array([[0.4189453125,1.3515625,-1.5810546875,1.3515625,-0.7431640625,0.234375,-0.0322265625],
+                                    [-0.0322265625,0.64453125,0.6748046875,-0.453125,0.2236328125,-0.06640625,0.0087890625],
+                                    [0.0087890625,-0.09375,0.8291015625,0.3671875,-0.1455078125,0.0390625,-0.0048828125],
+                                    [-0.0048828125,0.04296875,-0.1962890625,1,0.1962890625,-0.04296875,0.0048828125],
+                                    [0.0048828125,-0.0390625,0.1455078125,-0.3671875,1.1708984375,0.09375,-0.0087890625],
+                                    [-0.0087890625,0.06640625,-0.2236328125,0.453125,-0.6748046875,1.35546875,0.0322265625],
+                                    [0.0322265625,-0.234375,0.7431640625,-1.3515625,1.5810546875,-1.3515625,1.5810546875]])
+
+
+
 def undivided_differences_1d(input_data, order, grid, bias=BIAS_NONE, include_left=False):
     """
         Returns an array with the left stencils (in {0, ,.., order-1}) for ENO interpolation, 
@@ -186,4 +221,85 @@ def interpolate_2d_decimator_staggered(input_data, order, grid, component=COMP_H
     else: # vertical component
         for j in range(0,grid.ny,2):
             coarse[:,int(j/2)] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
+    return coarse
+
+
+def upscale_avg_1d(input_data, order, grid, include_left=False):
+    """ returns ENO interpolations a half mesh-step to the right (no ghost cells)
+
+        input_data: 1d array of N physical cells + 2*grid.gw ghost cells
+    """
+
+    # First set the ENO coefficients
+    # If loffset[i] = k, then the scalar product <c[k], data in stencil> is the ENO reconstruction
+    if order == 3:
+        cL = ENO3_AVG_UPSCALE_COEF_L
+        cR = ENO3_AVG_UPSCALE_COEF_R
+    elif order == 5:
+        cL = ENO5_AVG_UPSCALE_COEF_L
+        cR = ENO5_AVG_UPSCALE_COEF_R
+    elif order == 7:
+        cL = ENO7_AVG_UPSCALE_COEF_L
+        cR = ENO7_AVG_UPSCALE_COEF_R
+    else:
+        raise Exception("ENO interpolation not implemented for order {}".format(order))
+
+    loffsets = undivided_differences_1d(input_data, order, grid, BIAS_NONE, include_left)
+    N = len(input_data)-2*grid.gw + (1 if include_left else 0)
+    gw_l = grid.gw-1 if include_left else grid.gw
+    enorecs = np.zeros(2*N)
+    for i in range(N):
+        lshift = loffsets[i]
+        start = i+gw_l-lshift
+        enorecs[2*i] = np.dot(cL[lshift], input_data[start : start+order])
+        enorecs[2*i + 1] = np.dot(cR[lshift], input_data[start : start+order])
+    return enorecs
+
+
+def fv_2d_predictor(input_data, order, grid):
+    """
+        Receives
+        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with cell avgs for one component of velocity
+
+        Returns
+        a 2d, (2*grid.nx) x (2*grid.ny) array, ie with no ghost cells, containing the upscaling 
+                    with ENO<order> of input_data to cell avgs in the finer grid
+    """
+    gw = grid.gw
+    fine = np.zeros((2*grid.nx,2*grid.ny))
+
+    for i in range(grid.nx):
+        fine[2*i,:] =  upscale_avg_1d(input_data[i+gw,:], order, grid)
+
+    midgrid = np.zeros(grid.nx + 2*gw)
+    for j in range(2*grid.ny):
+        midgrid[gw:-gw] = fine[0::2, j] 
+        grid.bcs.apply_bc_1d(midgrid, gw, grid.bcs.AXIS_EW)
+        fine[:, j] = upscale_avg_1d(midgrid, order, grid)
+        #^ this intentionally overwrites the previous results. Can one be neater about it?
+
+    return fine
+
+def fv_2d_decimator(input_data, grid):
+    """
+        Receives
+        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with one component of velocity (cell avgs)
+
+        Returns
+        a 2d, (grid.nx/2) x (grid.ny/2) array, ie with no ghost cells, containing the downscaling 
+        of the cell avgs of input_data to a coarser grid. This operation is exact.
+    """
+    gw = grid.gw
+    if grid.nx % 2 != 0 or grid.ny % 2 != 0:
+        raise Exception("Decimator will not work on meshes with odd dimensions!")
+    coarse = np.zeros((int(grid.nx/2),int(grid.ny/2)))
+
+    for i in range(0,grid.nx,2):
+        for j in range(0, grid.ny,2):
+            ig = i+gw
+            jg = j+gw
+            coarse[int(i/2),int(j/2)] = 0.25*(input_data[ig,jg] + input_data[ig+1,jg] + \
+                                                input_data[ig,jg+1] + input_data[ig+1,jg+1])
     return coarse
