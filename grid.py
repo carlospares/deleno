@@ -16,11 +16,11 @@ class Grid:
         # ny : number of cells in y axis (ie #rows), j in range(ny); ~y
         # data accessed like data[i,j]
         if len(datashape) == 3: # velocity pair
-            self.nx = datashape[1]
-            self.ny = datashape[2]
+            self.nx = int(datashape[1])
+            self.ny = int(datashape[2])
         elif len(datashape) == 2: # single variable
-            self.nx = datashape[0]
-            self.ny = datashape[1]
+            self.nx = int(datashape[0])
+            self.ny = int(datashape[1])
         self.gw = nghosts
         self.bcs = BC() if options is None else BC(options.bcs)
         self.generate_params()

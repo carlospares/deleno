@@ -16,15 +16,9 @@ def idiv_tuple(t, d):
     # integer-divide all elements in t by d
     return tuple(int(e/d) for e in t)
 
-# def compress_one_step_staggered(f_u, options, t=0.2):
-#     gw = options.gw
-#     grid_fine = Grid(f_u.shape , gw)
-#     grid_coarse = Grid(idiv_tuple(f_u.shape, 2) , gw)
-# I don't think this makes a lot of sense; keeping around for now 
 
-
-def compressed_encoding_staggered(options, t=0.2):
-    fK = dh.load_data(options.name)[0]
+def compressed_encoding(options, t=0.2):
+    fK = dh.load_data(options.name)
     K = int(round(np.log2(options.maxN/options.minN)))
     gw = options.gw
     
@@ -41,19 +35,29 @@ def compressed_encoding_staggered(options, t=0.2):
         grid_fine = Grid( idiv_tuple(fK.shape, 2**(K-k)) , gw)
         grid_coarse = Grid( idiv_tuple(fK.shape, 2**(K-k+1)) , gw)
 
-        f_u[k-1] = grid_coarse.bcs.extend_with_bc_2d(
-                        eno.interpolate_2d_decimator_staggered(f_u[k], gw, grid_fine, eno.COMP_HOR),
-                        gw)
+        if options.is_grid_staggered():
+            f_u[k-1] = grid_coarse.bcs.extend_with_bc_2d(
+                            eno.interpolate_2d_decimator_staggered(f_u[k], gw, grid_fine, eno.COMP_HOR),
+                            gw)
+        elif options.is_grid_fv():
+            f_u[k-1] = grid_coarse.bcs.extend_with_bc_2d(
+                        eno.fv_2d_decimator(f_u[k], grid_fine), gw)
+        else:
+            raise Exception("encoding :: Type of grid not known!")
 
     fhat_u[0] = f_u[0]
     for k in range(1, K+1):
         grid_fine = Grid( idiv_tuple(fK.shape, 2**(K-k)) , gw)
         grid_coarse = Grid( idiv_tuple(fK.shape, 2**(K-k+1)) , gw)
 
-        ftilde_u[k] = grid_fine.bcs.extend_with_bc_2d(
-                                eno.interpolate_2d_predictor_staggered(fhat_u[k-1], gw, 
-                                                                        grid_coarse, eno.COMP_HOR),
-                                gw)
+        if options.is_grid_staggered():
+            ftilde_u[k] = grid_fine.bcs.extend_with_bc_2d(
+                                    eno.interpolate_2d_predictor_staggered(fhat_u[k-1], gw, 
+                                                                            grid_coarse, eno.COMP_HOR),
+                                    gw)
+        elif options.is_grid_fv():
+            ftilde_u[k] = grid_fine.bcs.extend_with_bc_2d(
+                                eno.fv_2d_predictor(fhat_u[k-1], gw, grid_coarse), gw)
 
         d = f_u[k] - ftilde_u[k]
         compression = truncate(d, options.epsilon*(t ** (K-k)))

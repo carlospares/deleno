@@ -19,11 +19,11 @@ class TestPeriodicBC(unittest.TestCase):
         """
         BC = BoundaryCondition(["P","P","P","P"])
         A = np.array([[1.,2.], [3.,4.]])
-        data = np.zeros((6,6))
-        data[2:4, 2:4] = A
+        data = np.zeros((1,6,6))
+        data[0, 2:4, 2:4] = A
         BC.apply_bc_2d(data, 2)
         ref = np.kron(np.ones((3,3)),A)
-        np.testing.assert_array_equal(data, ref)
+        np.testing.assert_array_equal(data, ref[np.newaxis,:])
 
     def test_1d_bc_periodic_extend(self):
         """
@@ -39,7 +39,7 @@ class TestPeriodicBC(unittest.TestCase):
         Test 2d BCs (add ghost cells)
         """
         BC = BoundaryCondition(["P","P","P","P"])
-        A = np.array([[1.,2.], [3.,4.]])
+        A = np.array([[[1.,2.], [3.,4.]]])
         data = BC.extend_with_bc_2d(A, 2)
         ref = np.kron(np.ones((3,3)),A)
         np.testing.assert_array_equal(data, ref)

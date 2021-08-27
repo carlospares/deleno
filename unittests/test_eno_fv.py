@@ -20,12 +20,12 @@ class TestEnoUpscaling(unittest.TestCase):
                 grid = Grid((N,N), p)
                 wBC = grid.bcs.extend_with_bc_1d(data, grid.gw)
                 if exp < p:
-                    np.testing.assert_almost_equal(eno.upscale_avg_1d(wBC, p, grid),  
+                    np.testing.assert_almost_equal(eno.eno_upscale_avg_1d(wBC, p, grid),  
                                                     ref, decimal=3)
                 else:
                     np.testing.assert_raises(AssertionError, 
                                 np.testing.assert_almost_equal, 
-                                eno.upscale_avg_1d(wBC, p, grid), 
+                                eno.eno_upscale_avg_1d(wBC, p, grid), 
                                 ref**exp, decimal=3)
 
     def test_eno_fv_2d_predictor(self):
@@ -39,14 +39,14 @@ class TestEnoUpscaling(unittest.TestCase):
             gw = p
             errors = []
             for N in [64, 128]:
-                grid = Grid((N,N), gw)
+                grid = Grid((1,N,N), gw)
                 X,Y = np.meshgrid(grid.x + 0.5*grid.dx, grid.y + 0.5*grid.dy)
 
                 data = f(X,Y,grid.dx, grid.dy).T
-                wBC = grid.bcs.extend_with_bc_2d(data, grid.gw)
+                wBC = grid.bcs.extend_with_bc_2d(data[np.newaxis], grid.gw)
                 interp = eno.fv_2d_predictor(wBC, p, grid)
 
-                fine_grid = Grid((2*N, 2*N), gw)
+                fine_grid = Grid((1,2*N, 2*N), gw)
                 Xf, Yf = np.meshgrid(fine_grid.x + 0.5*fine_grid.dx, fine_grid.y + 0.5*fine_grid.dy)
 
                 fine_data = f(Xf,Yf, fine_grid.dx, fine_grid.dy).T
@@ -65,14 +65,14 @@ class TestEnoUpscaling(unittest.TestCase):
         
         gw = 4
         for N in [128, 256]:
-            grid = Grid((N,N), gw)
+            grid = Grid((1,N,N), gw)
             X,Y = np.meshgrid(grid.x + 0.5*grid.dx, grid.y + 0.5*grid.dy)
 
             data = f(X,Y,grid.dx, grid.dy).T
-            wBC = grid.bcs.extend_with_bc_2d(data, grid.gw)
+            wBC = grid.bcs.extend_with_bc_2d(data[np.newaxis], grid.gw)
             avgd = eno.fv_2d_decimator(wBC, grid)
 
-            coarse_grid = Grid((N/2, N/2), gw)
+            coarse_grid = Grid((1, N/2, N/2), gw)
             Xc, Yc = np.meshgrid(coarse_grid.x + 0.5*coarse_grid.dx, coarse_grid.y + 0.5*coarse_grid.dy)
 
             coarse_data = f(Xc,Yc, coarse_grid.dx, coarse_grid.dy).T

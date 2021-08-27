@@ -129,7 +129,31 @@ def interpolate_1d(input_data, order, grid, bias=BIAS_NONE, include_left=False):
         enorecs[i] = np.dot(c[lshift], input_data[start : start+order])
     return enorecs
 
-def interpolate_2d_predictor_staggered(input_data, order, grid, component=COMP_HOR):
+
+def interpolate_2d_predictor_staggered(input_data, order, grid):
+    """
+        Receives
+        input_data: a 3d, ncomp x (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with all components of velocity (staggered as Arakawa-C)
+
+        Returns
+        a 3d, ncomp x (2*grid.nx) x (2*grid.ny) array, ie with no ghost cells, containing the 
+        upscaling with ENO<order> of input_data to the finer grid
+    """
+    output = np.zeros((input_data.shape[0], 2*grid.nx, 2*grid.ny))
+    for comp in range(input_data.shape[0]):
+        if comp == 0:
+            component = COMP_HOR
+        elif comp == 1:
+            component = COMP_VERT
+        else:
+            raise Exception("Staggered grid only implemented for 2D")
+        output[comp] = interpolate_2d_predictor_staggered_comp(input_data[comp], order, grid,
+                                                                component)
+    return output
+
+
+def interpolate_2d_predictor_staggered_comp(input_data, order, grid, component=COMP_HOR):
     """
         Receives
         input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
@@ -198,7 +222,33 @@ def interpolate_2d_predictor_staggered(input_data, order, grid, component=COMP_H
 
     return fine
 
-def interpolate_2d_decimator_staggered(input_data, order, grid, component=COMP_HOR):
+
+def interpolate_2d_decimator_staggered(input_data, order, grid):
+    """
+        Receives
+        input_data: a 3d ncomp x (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with all components of velocity (staggered as Arakawa-C)
+
+        Returns
+        a 3d, ncomp x (grid.nx/2) x (grid.ny/2) array, ie with no ghost cells, containing the 
+        downscaling with ENO<order> of input_data to the coarser grid. Note that this is non-trivial
+        due to staggering.
+    """
+    output = np.zeros((input_data.shape[0], grid.nx//2, grid.ny//2))
+    for comp in range(input_data.shape[0]):
+        if comp == 0:
+            component = COMP_HOR
+        elif comp == 1:
+            component = COMP_VERT
+        else:
+            raise Exception("Staggered grid only implemented for 2D")
+        output[comp] = interpolate_2d_decimator_staggered_comp(input_data[comp], order, grid,
+                                                                component)
+    return output
+
+
+
+def interpolate_2d_decimator_staggered_comp(input_data, order, grid, component=COMP_HOR):
     """
         Receives
         input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
@@ -213,18 +263,18 @@ def interpolate_2d_decimator_staggered(input_data, order, grid, component=COMP_H
     gw = grid.gw
     if grid.nx % 2 != 0 or grid.ny % 2 != 0:
         raise Exception("Decimator will not work on meshes with odd dimensions!")
-    coarse = np.zeros((int(grid.nx/2),int(grid.ny/2)))
+    coarse = np.zeros((grid.nx//2,grid.ny//2))
 
     if component==COMP_HOR:
         for i in range(0,grid.nx,2):
-            coarse[int(i/2),:] = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)[0::2]
+            coarse[i//2,:] = interpolate_1d(input_data[i+gw,:], order, grid, bias=BIAS_RIGHT)[0::2]
     else: # vertical component
         for j in range(0,grid.ny,2):
-            coarse[:,int(j/2)] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
+            coarse[:,j//2] = interpolate_1d(input_data[:,j+gw], order, grid, bias=BIAS_RIGHT)[0::2]
     return coarse
 
 
-def upscale_avg_1d(input_data, order, grid, include_left=False):
+def eno_upscale_avg_1d(input_data, order, grid, include_left=False):
     """ returns ENO interpolations a half mesh-step to the right (no ghost cells)
 
         input_data: 1d array of N physical cells + 2*grid.gw ghost cells
@@ -255,8 +305,35 @@ def upscale_avg_1d(input_data, order, grid, include_left=False):
         enorecs[2*i + 1] = np.dot(cR[lshift], input_data[start : start+order])
     return enorecs
 
+    loffsets = undivided_differences_1d(input_data, order, grid, BIAS_NONE, include_left)
+    N = len(input_data)-2*grid.gw + (1 if include_left else 0)
+    gw_l = grid.gw-1 if include_left else grid.gw
+    enorecs = np.zeros(2*N)
+    for i in range(N):
+        lshift = loffsets[i]
+        start = i+gw_l-lshift
+        enorecs[2*i] = np.dot(cL[lshift], input_data[start : start+order])
+        enorecs[2*i + 1] = np.dot(cR[lshift], input_data[start : start+order])
+    return enorecs
+
 
 def fv_2d_predictor(input_data, order, grid):
+    """
+        Receives
+        input_data: a 3d ncomp x (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with cell avgs for all components of velocity
+
+        Returns
+        a 3d, ncomp x (2*grid.nx) x (2*grid.ny) array, ie with no ghost cells, containing the 
+        upscaling with ENO<order> of input_data to cell avgs in the finer grid
+    """
+    output = np.zeros((input_data.shape[0], grid.nx*2, grid.ny*2))
+    for comp in range(input_data.shape[0]):
+        output[comp] = fv_2d_predictor_comp(input_data[comp], order, grid)
+    return output
+
+
+def fv_2d_predictor_comp(input_data, order, grid):
     """
         Receives
         input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
@@ -270,13 +347,13 @@ def fv_2d_predictor(input_data, order, grid):
     fine = np.zeros((2*grid.nx,2*grid.ny))
 
     for i in range(grid.nx):
-        fine[2*i,:] =  upscale_avg_1d(input_data[i+gw,:], order, grid)
+        fine[2*i,:] =  eno_upscale_avg_1d(input_data[i+gw,:], order, grid)
 
     midgrid = np.zeros(grid.nx + 2*gw)
     for j in range(2*grid.ny):
         midgrid[gw:-gw] = fine[0::2, j] 
         grid.bcs.apply_bc_1d(midgrid, gw, grid.bcs.AXIS_EW)
-        fine[:, j] = upscale_avg_1d(midgrid, order, grid)
+        fine[:, j] = eno_upscale_avg_1d(midgrid, order, grid)
         #^ this intentionally overwrites the previous results. Can one be neater about it?
 
     return fine
@@ -284,7 +361,22 @@ def fv_2d_predictor(input_data, order, grid):
 def fv_2d_decimator(input_data, grid):
     """
         Receives
-        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+        input_data: a 3d ncomp x (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with all components of velocity (cell avgs)
+
+        Returns
+        a 3d, ncomp x (grid.nx/2) x (grid.ny/2) array, ie with no ghost cells, containing the 
+        downscaling of the cell avgs of input_data to a coarser grid. This operation is exact.
+    """
+    output = np.zeros((input_data.shape[0], grid.nx//2, grid.ny//2))
+    for comp in range(input_data.shape[0]):
+        output[comp] = fv_2d_decimator_comp(input_data[comp], grid)
+    return output
+
+def fv_2d_decimator_comp(input_data, grid):
+    """
+        Receives
+        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array (ghost cells 
                     appropriately filled) with one component of velocity (cell avgs)
 
         Returns
@@ -294,12 +386,50 @@ def fv_2d_decimator(input_data, grid):
     gw = grid.gw
     if grid.nx % 2 != 0 or grid.ny % 2 != 0:
         raise Exception("Decimator will not work on meshes with odd dimensions!")
-    coarse = np.zeros((int(grid.nx/2),int(grid.ny/2)))
+    coarse = np.zeros((grid.nx//2, grid.ny//2))
 
     for i in range(0,grid.nx,2):
         for j in range(0, grid.ny,2):
             ig = i+gw
             jg = j+gw
-            coarse[int(i/2),int(j/2)] = 0.25*(input_data[ig,jg] + input_data[ig+1,jg] + \
+            coarse[i//2,j//2] = 0.25*(input_data[ig,jg] + input_data[ig+1,jg] + \
                                                 input_data[ig,jg+1] + input_data[ig+1,jg+1])
     return coarse
+
+def trivial_fv_2d_predictor(input_data, grid):
+    """
+        Receives
+        input_data: a 3d ncomp x (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with cell avgs for one component of velocity
+
+        Returns
+        a 3d, ncomp x (2*grid.nx) x (2*grid.ny) array, ie with no ghost cells, containing the 
+        trivial FV upscaling (ie repeating cells) of input_data to cell avgs in the finer grid
+    """
+    output = np.zeros((input_data.shape[0], grid.nx*2, grid.ny*2))
+    for comp in range(input_data.shape[0]):
+        output[comp] = trivial_fv_2d_predictor_comp(input_data[comp], grid)
+    return output
+
+
+def trivial_fv_2d_predictor_comp(input_data, grid):
+    """
+        Receives
+        input_data: a 2d (grid.nx + 2*grid.gw) x (grid.ny + 2*grid.gw) array  (ghost cells 
+                    appropriately filled) with cell avgs for one component of velocity
+
+        Returns
+        a 2d, (2*grid.nx) x (2*grid.ny) array, ie with no ghost cells, containing the trivial
+                    FV upscaling of input_data to cell avgs in the finer grid
+    """
+    gw = grid.gw
+    fine = np.zeros((2*grid.nx,2*grid.ny))
+    for i in range(grid.nx):
+        for j in range(grid.ny):
+            datum = input_data[i+gw, j+gw]
+            fine[2*i, 2*j] = datum
+            fine[2*i+1, 2*j] = datum
+            fine[2*i, 2*j+1] = datum
+            fine[2*i+1, 2*j+1] = datum
+
+    return fine
