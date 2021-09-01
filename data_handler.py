@@ -132,13 +132,13 @@ def richardson_and_compare(options):
     name_coarse = options.name.replace(str(options.maxN), "64")
     name_mid    = options.name.replace(str(options.maxN), "128")
     name_fine   = options.name.replace(str(options.maxN), "256")
-    name_truth  = options.name.replace(str(options.maxN), "512")
+    name_truth  = options.name#.replace(str(options.maxN), "512")
 
     coarse = load_data(name_coarse)
     mid    = load_data(name_mid)
     fine   = load_data(name_fine)
     truth  = load_data(name_truth)
 
-    extrapolated = richardson_extrapolation_fv(coarse, mid, fine)
+    extrapolated = richardson_extrapolation_fv(coarse, mid, fine, refinements=2)
     quick_plot_compare(extrapolated[0], truth[0])
     plt.show()
