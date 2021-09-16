@@ -6,7 +6,12 @@ import data_handler as dh
 import encoding
 import decoding
 
+from extrapolation import iterative_upscale
+from grid import Grid
+import eno_tools as eno
+
 options = Options() # parse command line
+print(options.name)
 
 if options.compare or options.details:
     f0, dhats = encoding.compressed_encoding(options)
@@ -28,8 +33,28 @@ if options.details:
     dh.quick_conv_plot(details_L1size, options)
     dh.save_plot("details_L1", options)
 
-if options.richardson:
-    dh.richardson_and_compare(options)
+if options.extrapolate:
+    dh.extrapolate_and_compare(options)
+
+
+# if "1024" not in options.name:
+#     pass
+# else:
+# truth = dh.load_data(options.name)
+# if options.order == 0:
+#     upscale = lambda data, grid: eno.trivial_fv_2d_predictor(data, grid)
+#     nghosts = 0
+# else:
+#     upscale = lambda data, grid: eno.fv_2d_predictor(data, options.order, grid)
+#     nghosts = options.order
+
+# for N in [64, 128, 256, 512]:
+#     print(f"Comparing to real data, N={N}")
+#     nrefs = int(np.log2(1024/N))
+#     file = options.name.replace("1024", str(N))
+#     data = dh.load_data(file)
+#     data = iterative_upscale(upscale, data, nrefs, nghosts)
+#     dh.quick_plot_compare(data[0], truth[0])
 
 
 # decoded = decoding.compressed_decoding(f0, dhats, options)

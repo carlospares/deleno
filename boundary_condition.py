@@ -2,8 +2,8 @@ import numpy as np
 
 class BoundaryCondition:
 
-    AXIS_NS = 0 # along Y axis
-    AXIS_EW = 1 # along X axis
+    AXIS_NS = 0 # along Y axis; one column is data[i,:]
+    AXIS_EW = 1 # along X axis; one row is data[:,j]
 
     BC_PER = 'P'
 
@@ -25,10 +25,11 @@ class BoundaryCondition:
                 raise Exception("One-sided periodic BCs are not allowed")
 
     def apply_bc_1d(self, data, nghosts, direction=AXIS_NS):
-        # overwrites ghost cells in data with appropriate values
-        # data: array of N+2*nghosts cells; the left and right nghosts cells will be overwritten 
-        #        with appropriate data
-        # direction: AXIS_NS or AXIS_EW. Defaults to AXIS_NS, to avoid typing it unless relevant
+        """ overwrites ghost cells in data with appropriate values
+        data: array of N+2*nghosts cells; the left and right nghosts cells will be overwritten 
+               with appropriate data
+        direction: AXIS_NS or AXIS_EW. Defaults to AXIS_NS, to avoid typing it unless relevant 
+        """
         if direction == self.AXIS_NS:
             bcL = self.bcS
             bcR = self.bcN
@@ -49,8 +50,9 @@ class BoundaryCondition:
 
 
     def apply_bc_2d_comp(self, data, nghosts):
-        # overwrites ghost cells in data with appropriate values for one component
-        # data: 2d array of (N+2*nghosts) x (N+2*nghosts) cells
+        """ overwrites ghost cells in data with appropriate values for one component
+        data: 2d array of (N+2*nghosts) x (N+2*nghosts) cells 
+        """
         N = data.shape[0] - 2*nghosts
         for i in range(N):
             self.apply_bc_1d(data[i+nghosts,:], nghosts, self.AXIS_NS)
@@ -63,24 +65,18 @@ class BoundaryCondition:
             self.apply_bc_2d_comp(data[comp], nghosts)
 
     def extend_with_bc_1d(self, data, nghosts, direction=AXIS_NS):
-        # creates a new array of size (len(data) + 2*nghosts) with correct BCs
-        # out of a 1d array with physical cells only, data
+        """ creates a new array of size (len(data) + 2*nghosts) with correct BCs
+        out of a 1d array with physical cells only, data 
+        """
         wBCs = np.zeros(len(data) + 2*nghosts)
         wBCs[nghosts:len(data)+nghosts] = data
         self.apply_bc_1d(wBCs, nghosts, direction)
         return wBCs
 
-    # def extend_with_bc_2d_comp(self, data, nghosts):
-    #     # creates a new array of size (len(data) + 2*nghosts)^2 with correct BCs
-    #     # out of a 2d array with physical cells only, data
-    #     nx = data.shape[0]
-    #     ny = data.shape[1]
-    #     wBCs = np.zeros((nx + 2*nghosts, ny + 2*nghosts))
-    #     wBCs[nghosts:nx+nghosts, nghosts:ny+nghosts] = data
-    #     self.apply_bc_2d(wBCs, nghosts)
-    #     return wBCs
-
     def extend_with_bc_2d(self, data, nghosts):
+        """ creates a new array of size (len(data) + 2*nghosts)^2 with correct BCs
+        out of a 2d array with physical cells only, data
+        """
         nx = data.shape[1]
         ny = data.shape[2]
         wBCs = np.zeros((data.shape[0], nx + 2*nghosts, ny + 2*nghosts))

@@ -15,8 +15,8 @@ class TestEnoUpscaling(unittest.TestCase):
         N = len(basedata)
         for p in [3,5,7]:
             for exp in range(1,11):
-                data = 0.5*(basedata[1:]**(exp+1) - basedata[:-1]**(exp+1))/(p+1)
-                ref =  (baseref[1:]**(exp+1) - baseref[:-1]**(exp+1))/(p+1)
+                data = 0.5*(basedata[1:]**(exp+1) - basedata[:-1]**(exp+1))/(exp+1)
+                ref =  (baseref[1:]**(exp+1) - baseref[:-1]**(exp+1))/(exp+1)
                 grid = Grid((N,N), p)
                 wBC = grid.bcs.extend_with_bc_1d(data, grid.gw)
                 if exp < p:
@@ -26,7 +26,7 @@ class TestEnoUpscaling(unittest.TestCase):
                     np.testing.assert_raises(AssertionError, 
                                 np.testing.assert_almost_equal, 
                                 eno.eno_upscale_avg_1d(wBC, p, grid), 
-                                ref**exp, decimal=3)
+                                ref, decimal=3)
 
     def test_eno_fv_2d_predictor(self):
         """

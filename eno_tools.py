@@ -180,13 +180,13 @@ def interpolate_2d_predictor_staggered_comp(input_data, order, grid, component=C
     if component == COMP_HOR:
         end_across = grid.ny
         end_along = grid.nx
-        axis_across = grid.bcs.AXIS_NS
-        axis_along = grid.bcs.AXIS_EW
+        axis_across = BC.AXIS_NS
+        axis_along = BC.AXIS_EW
     elif component == COMP_VERT:
         end_across = grid.nx
         end_along = grid.ny
-        axis_across = grid.bcs.AXIS_EW
-        axis_along = grid.bcs.AXIS_NS
+        axis_across = BC.AXIS_EW
+        axis_along = BC.AXIS_NS
 
     midgrid = np.zeros(2*end_across + 2*gw)
     for i in range(end_along):
@@ -221,6 +221,7 @@ def interpolate_2d_predictor_staggered_comp(input_data, order, grid, component=C
             fine[j, 1:(2*end_along):2] = interpolate_1d(midgrid, order, grid, bias=BIAS_RIGHT)
 
     return fine
+
 
 
 def interpolate_2d_decimator_staggered(input_data, order, grid):
@@ -275,7 +276,8 @@ def interpolate_2d_decimator_staggered_comp(input_data, order, grid, component=C
 
 
 def eno_upscale_avg_1d(input_data, order, grid, include_left=False):
-    """ returns ENO interpolations a half mesh-step to the right (no ghost cells)
+    """ returns cell averages, upscaled with ENO to a grid of twice the resolution, with cells
+        assumed to be split down the middle.
 
         input_data: 1d array of N physical cells + 2*grid.gw ghost cells
     """
@@ -431,5 +433,24 @@ def trivial_fv_2d_predictor_comp(input_data, grid):
             fine[2*i+1, 2*j] = datum
             fine[2*i, 2*j+1] = datum
             fine[2*i+1, 2*j+1] = datum
+
+    return fine
+
+def trivial_fv_1d_predictor(input_data, grid, direction=BC.AXIS_NS):
+    """
+        Receives
+        input_data: a 1d (grid.nx + 2*grid.gw) array (ghost cells appropriately filled) 
+        with cell avgs for one component of velocity
+
+        Returns
+        a 1d, (2*grid.nx) array, ie with no ghost cells, containing the trivial
+                    FV upscaling of input_data to cell avgs in the finer grid
+    """
+    gw = grid.gw
+    N = grid.ny if direction==BC.AXIS_NS else grid.nx
+    fine = np.zeros(2*N)
+    for i in range(N):
+        fine[2*i] = input_data[i+gw]
+        fine[2*i+1] = input_data[i+gw]
 
     return fine

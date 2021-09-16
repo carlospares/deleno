@@ -4,7 +4,8 @@ from collections import deque
 import h5py
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy
-from richardson import richardson_extrapolation_fv
+import extrapolation
+from grid import Grid
 
 def load_data(filename):
     if filename.endswith(".npy"):
@@ -46,13 +47,15 @@ def load_vtk(filename):
     Uy = reader.GetOutput().GetPointData().GetArray("y")
     
     if Ux is None:
-        print("x array is None. Trying again with name Vec_0xbe3060_0{x,y}")
+        # silently try to work around the luqness output filename issue:
+        # print("x array is None. Trying again with name Vec_0xbe3060_0{x,y}")
         Ux = reader.GetOutput().GetPointData().GetArray("Vec_0xbe3060_0x")
         Uy = reader.GetOutput().GetPointData().GetArray("Vec_0xbe3060_0y")
     if Ux is None:
-        raise IOError("It didn't help :(")
+        raise IOError("vts file has unexpected format and can't be parsed")
     else:
-        print("Using Vec_0xbe3060_0{x,y} worked :)")
+        pass # with either name, data has been recovered
+        #print("Using Vec_0xbe3060_0{x,y} worked :)")
 
     data = np.array([vtk_to_numpy(Ux), vtk_to_numpy(Uy)])
     N = int(np.sqrt(len(data[0])))
@@ -71,11 +74,18 @@ def quick_plot(data):
     plt.contourf(data, 20)
     plt.colorbar()
 
+def quick_L1_diff(data1, data2):
+    v = data1.shape[0]*data1.shape[1]
+    errorL1 = np.sum(np.abs(data1-data2))/v
+    normd2 = np.sum(np.abs(data2))/v
+    return errorL1/normd2
+
 def quick_plot_compare(data1, data2):
     # assumes both data are the same size
     v = data1.shape[0]*data1.shape[1]
     errorL1 = np.sum(np.abs(data1-data2))/v
-    print(f"Asumming [0,1]^2, difference in L1 is {errorL1}")
+    normd2 = np.sum(np.abs(data2))/v
+    print(f"Asumming [0,1]^2, difference in L1 is {errorL1} (i.e. {round(100*errorL1/normd2, 2)}%)")
     plt.subplot(311)
     plt.contourf(data1, 20)
     plt.colorbar()
@@ -128,17 +138,37 @@ def compare_to_real(downscaled, options):
     return dists
 
 
-def richardson_and_compare(options):
-    name_coarse = options.name.replace(str(options.maxN), "64")
-    name_mid    = options.name.replace(str(options.maxN), "128")
-    name_fine   = options.name.replace(str(options.maxN), "256")
-    name_truth  = options.name#.replace(str(options.maxN), "512")
+def extrapolate_and_compare(options):
+    minN = options.minN
+    maxN = options.maxN
+    gw = options.gw
+    if str(maxN) not in options.name:
+        raise Exception(f"Ground truth file {options.name} does not contain options.maxN={maxN}")
+    name_coarse = options.name.replace(str(maxN), str(minN))
+    name_mid    = options.name.replace(str(maxN), str(2*minN))
+    name_fine   = options.name.replace(str(maxN), str(4*minN))
+    name_truth  = options.name
 
-    coarse = load_data(name_coarse)
+    coarse = load_data(name_coarse)    
     mid    = load_data(name_mid)
     fine   = load_data(name_fine)
     truth  = load_data(name_truth)
 
-    extrapolated = richardson_extrapolation_fv(coarse, mid, fine, refinements=2)
-    quick_plot_compare(extrapolated[0], truth[0])
-    plt.show()
+    refs = int(np.log2(maxN/(4*minN)))
+
+    op = extrapolation.choose_algorithm(options.extrap_which) #choose an extrapolation operator
+    extrapolated = op(coarse, mid, fine, order=options.order, refinements=refs)
+
+    # do some analysis of the data here:
+    upscale, nghosts = extrapolation.get_upscale_nghosts(options.order)
+    fine_upscale = extrapolation.iterative_upscale(upscale, fine, refs, nghosts)
+
+    for comp in range(1):#truth.shape[0]):
+        # print("Comparing extrapolated data to ground truth...")
+        extrap_error = quick_L1_diff(extrapolated[comp], truth[comp])
+        # print("Comparing finest data in extrapolation to ground truth... (error should be bigger!)")
+        real_error = quick_L1_diff(fine_upscale[comp], truth[comp])
+        if extrap_error < real_error:
+            print(f"Component {comp}: success! {extrap_error} < {real_error}")
+        else:
+            print(f"Component {comp}: well this was pointless. {extrap_error} > {real_error}")

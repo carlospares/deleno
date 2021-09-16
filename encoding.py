@@ -13,7 +13,7 @@ def truncate(arr_data, threshold):
     return num_clipped
 
 def idiv_tuple(t, d):
-    # integer-divide all elements in t by d
+    """ integer-divide all elements in t by d """
     return tuple(int(e/d) for e in t)
 
 

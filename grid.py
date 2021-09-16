@@ -3,8 +3,7 @@ from boundary_condition import BoundaryCondition as BC
 
 class Grid:
     def __init__(self, datashape, nghosts, options=None, limits=[0., 1., 0., 1.]):
-        # initializes a grid with basic information
-        # 
+        """initializes a grid with basic information"""
 
         # domain limits
         self.xmin = limits[0]
@@ -26,7 +25,7 @@ class Grid:
         self.generate_params()
 
     def generate_params(self):
-        # derives all non-input parameters
+        """ derives all non-input parameters """
 
         self.nxg = self.nx + 2*self.gw
         self.nyg = self.ny + 2*self.gw
