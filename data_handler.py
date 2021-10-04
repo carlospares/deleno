@@ -19,10 +19,11 @@ def load_data(filename):
 
 def load_npy(filename):
     data = np.load(filename)
-    N = int(np.sqrt(len(data[1])))
-    if N*N != len(data[1]):
+    N = int(np.sqrt(len(data[0])))
+    if N*N != len(data[0]):
         raise ValueError("Input data is malformed! Not of size NxN")
-    data = np.reshape(data, (2,N,N))
+    data = np.reshape(data, (data.shape[0],N,N))
+
     return data
 
 def load_h5(filename):
@@ -75,17 +76,30 @@ def quick_plot(data):
     plt.colorbar()
 
 def quick_L1_diff(data1, data2):
-    v = data1.shape[0]*data1.shape[1]
+    v = data1.shape[-1]*data1.shape[-2]
     errorL1 = np.sum(np.abs(data1-data2))/v
     normd2 = np.sum(np.abs(data2))/v
     return errorL1/normd2
 
+def norm_L2(data):
+    """ compute L2 norm of an array, assumed equispaced in [0,1]^2.
+    NOTE: if data is a 3d array of ncomp x nx x ny, compute norm of the full array
+    this may or may not be what you want to do, be careful! """
+    v = 1. / data.shape[-1] / data.shape[-2]
+    return np.sqrt(np.sum( np.square(data)) * v) 
+
+def quick_L2_diff(data1, data2):
+    errorL2 = norm_L2(data1-data2)
+    normd2 = norm_L2(data2)
+    return errorL2/normd2
+
+
 def quick_plot_compare(data1, data2):
     # assumes both data are the same size
-    v = data1.shape[0]*data1.shape[1]
-    errorL1 = np.sum(np.abs(data1-data2))/v
-    normd2 = np.sum(np.abs(data2))/v
-    print(f"Asumming [0,1]^2, difference in L1 is {errorL1} (i.e. {round(100*errorL1/normd2, 2)}%)")
+    errorL2 = norm_L2(data1-data2)
+    normd2 = norm_L2(data2)
+    print(f"Asumming [0,1]^2, difference in L2 is {errorL2} (i.e. {round(100*errorL2/normd2, 2)}%);"
+                    f" ground truth norm is {normd2}")
     plt.subplot(311)
     plt.contourf(data1, 20)
     plt.colorbar()
@@ -164,11 +178,138 @@ def extrapolate_and_compare(options):
     fine_upscale = extrapolation.iterative_upscale(upscale, fine, refs, nghosts)
 
     for comp in range(1):#truth.shape[0]):
-        # print("Comparing extrapolated data to ground truth...")
         extrap_error = quick_L1_diff(extrapolated[comp], truth[comp])
-        # print("Comparing finest data in extrapolation to ground truth... (error should be bigger!)")
         real_error = quick_L1_diff(fine_upscale[comp], truth[comp])
         if extrap_error < real_error:
             print(f"Component {comp}: success! {extrap_error} < {real_error}")
         else:
             print(f"Component {comp}: well this was pointless. {extrap_error} > {real_error}")
+
+def compare_upscale(options):
+    minN = options.minN
+    maxN = options.maxN
+    nrefs = int(np.log2(maxN/minN))
+    ps = [0,3,5]
+
+    if options.groundtruth is None:
+        ground_truth = load_data(options.name)
+        suffix_gt = ""
+        tag_gt = ""
+    else:
+        print(f"Loading expressly designated ground truth {options.groundtruth}")
+        ground_truth = load_data(options.groundtruth)
+        suffix_gt = "" if options.groundtruth is None else "_gt2048" # TODO generalize if needed
+        tag_gt = " (gt 2048)"
+
+    samples = []
+    Ns = [minN*(2**k) for k in range(nrefs)]
+    for k in range(nrefs):
+        try:
+            name = options.name.replace(str(maxN), str(int(minN*(2**k))))
+            samples.append(load_data(name))
+        except FileNotFoundError:
+            """ Files generated with the 1024-at-all-resolutions dataset have names where the number
+                of samples obviously is always 1024. Make a guess that this is the case and try
+                again, but make sure to warn the user!"""
+            name = options.name.replace(str(maxN), str(int(minN*(2**k))), 1)
+            print(f"Original file failed. Trying {name} instead. Is this what you want?")
+            samples.append(load_data(name))
+
+    dists = np.zeros((len(ps), nrefs))
+    upscales = [[] for p in ps]
+    for n, p in enumerate(ps):
+        if options.verbose:
+            print(f"Upscaling with order p={p}...")
+        upscale, nghosts = extrapolation.get_upscale_nghosts(p)
+        for k in range(nrefs):
+            upscaled = extrapolation.iterative_upscale(upscale, samples[k], nrefs-k, nghosts)
+            upscales[n].append(upscaled)
+            dists[n, k] = norm_L2(upscaled - ground_truth)
+            if options.extraplots:
+                for comp in range(samples[-1].shape[0]):
+                    quick_plot_compare(upscaled[comp], ground_truth[comp])
+                    plt.savefig(f"{options.prefix}_N{minN*(2**k)}_p{p}_comp{comp}{suffix_gt}")
+    plt.clf()
+    # plot absolute errors
+    for n, p in enumerate(ps):
+        label = f"ENO{p}" if p > 0 else "Trivial"
+        plt.loglog(Ns, dists[n,:], '*-', base=2, label=label)
+    plt.legend()
+    plt.grid("minor")
+    plt.title(f"Abs. error: {options.comment}{tag_gt}")
+    plt.savefig(f"{options.prefix}_upscale{suffix_gt}")
+
+    plt.clf()
+    # plot relative errors
+    print(norm_L2(ground_truth))
+    for n, p in enumerate(ps):
+        label = f"ENO{p}" if p > 0 else "Trivial"
+        plt.loglog(Ns, 100*dists[n,:]/norm_L2(ground_truth), '*-', base=10, label=label)
+    plt.legend()
+    plt.grid("minor")
+    plt.title(f"Rel. error: {options.comment}{tag_gt}")
+    plt.ylabel("% of ground truth")
+    plt.savefig(f"{options.prefix}_upscale_rel{suffix_gt}")
+
+    # # test differences to trivial
+    # # this is (as expected) absolute nonsense
+    # plt.clf()
+    # dist_to_triv = np.zeros((len(ps), nrefs))
+    # for n in range(1, len(ps)):
+    #     if ps[0] != 0:
+    #         print(f"ps[0] = {ps[0]}. We assume here ps[0]=0, output labels won't be accurate.")
+    #     p = ps[n]
+    #     for k in range(nrefs):
+    #         dist_to_triv[n, k] = norm_L2(upscales[n][k] - upscales[0][k])
+    #     label = f"ENO{p}"
+    #     plt.loglog(Ns, 100*dist_to_triv[n,:], '*-', base=2, label=label)
+    # plt.legend()
+    # plt.grid("minor")
+    # plt.title(f"Distance to trivial upscaling: {options.comment}")
+    # plt.ylabel("L2 dist")
+    # plt.savefig(f"{options.prefix}_disttriv")
+
+
+
+def check_regularity(options):
+    minN = options.minN
+    maxN = options.maxN
+    nrefs = int(np.log2(maxN/minN))
+    colors = ['b', 'r', 'g']
+
+    samples = []
+    Ns = [64, 128, 256, 512, 1024]
+    for N in Ns:
+        name = options.name.replace(str(maxN), str(N))
+        samples.append(load_data(name))
+
+    ncomps = samples[-1].shape[0]
+    maxNormgrad = 0
+
+    for comp in range(ncomps):
+        for k, N in enumerate(Ns):
+            dx = 1./N
+            data = samples[k][comp]
+            gradx = (np.roll(data, 1, 0) - np.roll(data, -1, 0))/(2*dx)
+            grady = (np.roll(data, 1, 1) - np.roll(data, -1, 1))/(2*dx)
+            normgrad = np.sqrt(gradx**2 + grady**2)
+            normnormgrad = norm_L2(normgrad)
+            maxNormgrad = max(maxNormgrad, normnormgrad)
+            dot, = plt.plot(np.log2(N), normnormgrad, '*', c=colors[comp])
+            if k == 0:
+                dot.set_label(f"Comp. {comp}")
+                lowgrad = normnormgrad
+            if k == len(Ns)-1:
+                highgrad = normnormgrad
+        slope = np.round((highgrad-lowgrad)/4, 4)
+        slopenorm = np.round(((highgrad-lowgrad)/4)/highgrad, 4)
+        plt.plot([6, 10], [lowgrad, highgrad], '--', c=colors[comp], label=f"Slope: {slope} (norm. {slopenorm})")
+    plt.xlabel("log2(N)")
+    plt.ylabel("Norm of gradient")
+    tag = "" if options.prefix is None else f"({options.prefix})"
+    plt.title(f"Norm of FD gradient {tag}")
+    plt.legend()
+    axes = plt.gca()
+    axes.set_ylim([0, 1.1*maxNormgrad])
+    plt.grid()
+    plt.show()

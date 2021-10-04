@@ -36,6 +36,12 @@ if options.details:
 if options.extrapolate:
     dh.extrapolate_and_compare(options)
 
+if options.compareupscale:
+    dh.compare_upscale(options)
+
+if options.checkregularity:
+    dh.check_regularity(options)
+
 
 # if "1024" not in options.name:
 #     pass

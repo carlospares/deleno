@@ -28,6 +28,10 @@ class Options:
                                 help='Order of reconstruction/interpolation')
         parser.add_argument('-c', '--compare', action='store_true', default=False,
                                 help="Compare decimator to real samples")
+        parser.add_argument('-cu', '--compareupscale', action='store_true', default=False,
+                                help="Compare ENO upscale to trivial extrapolation")
+        parser.add_argument('-cr', '--checkregularity', action='store_true', default=False,
+                                help="Check regularity of function through discrete gradient")
         parser.add_argument('-d', '--details', action='store_true', default=False,
                                 help="Plot size of details and details")
         parser.add_argument('-e', '--extrapolate', type=str, default=None,
@@ -38,6 +42,12 @@ class Options:
                                 help='Prefix this at end of output files')
         parser.add_argument('-eps', '--epsilon', type=float, default=0.,
                                 help='Threshold for compression')
+        parser.add_argument('-comm', '--comment', type=str, required=False,
+                                help='Comment field (eg to be used in plot titles)')
+        parser.add_argument('-ep', '--extraplots', action='store_true', default=False,
+                                help='If available, compute more plots along the way')
+        parser.add_argument('-gt', '--groundtruth', type=str, required=False,
+                                help='If present, take as ground truth wherever needed')
         args = parser.parse_args()
         self.name = args.name
         self.minN = args.minN
@@ -45,12 +55,17 @@ class Options:
         self.order = args.order
         self.bcs = args.bc
         self.compare = args.compare
+        self.compareupscale = args.compareupscale
+        self.checkregularity = args.checkregularity
         self.details = args.details
         self.verbose = args.verbose
         self.epsilon = args.epsilon
         self.prefix = args.prefix
         self.gw = self.order
+        self.comment = args.comment
+        self.extraplots = args.extraplots
         self.extrapolate = args.extrapolate is not None
+        self.groundtruth = args.groundtruth
         if self.extrapolate:
             if args.extrapolate in extrap_dict:
                 self.extrap_which = extrap_dict[args.extrapolate]

@@ -67,13 +67,6 @@ def iterative_upscale_1d(upscale, data, niters, nghosts, direction=BC.AXIS_NS):
         data_upscaled = upscale(grid.bcs.extend_with_bc_1d(data_upscaled, nghosts, direction), grid)
     return data_upscaled
 
-# def norm_L2(data):
-#     """ compute L2 norm of an array, assumed equispaced in [0,1]^2.
-#     NOTE: if data is a 3d array of ncomp x nx x ny, compute norm of the full array
-#     this may or may not be what you want to do, be careful! """
-#     v = 1. / data.shape[-1] / data.shape[-2]
-#     return np.sqrt(np.sum( np.square(data))) * v
-
 
 def norm_2(data, L2=False):
     """ compute 2-norm of a number/array/matrix as vector 2-norm, regardless of object type
@@ -232,8 +225,10 @@ def Anderson_extrapolation_fv(coarse, mid, fine, order=0, refinements=1, **kwarg
 
     return output
 
-def Aitken_extrapolation_step(coarse, mid, fine):
-    return fine - np.square(fine - mid)/(fine - 2*mid + coarse)
+def Aitken_extrapolation_step(coarse, mid, fine, tol=1e-9):
+    d = fine - 2*mid + coarse
+    # safety catch, otherwise near-constant sequences blow up
+    return (abs(d)<tol)*fine + (abs(d)>=tol)*np.nan_to_num((fine - np.square(fine - mid)/d))
 
 def Aitken_extrapolation_fv(coarse, mid, fine, order=0, refinements=1, **kwargs):
     """take three vector fields at successive resolutions, with cell averages.
@@ -256,6 +251,23 @@ def Aitken_extrapolation_fv(coarse, mid, fine, order=0, refinements=1, **kwargs)
 
         output[comp] = Aitken_extrapolation_step(c_u, m_u, f_u) 
 
+    return output
+
+
+def cwiseRichardson_extrapolation_step(coarse, mid, fine, rate=None, order=0, refinements=1, 
+                                                **kwargs):
+    try:
+        s = fine.shape
+    except AttributeError:
+        raise ValueError("componentwise Richardson can only be used with vectors.")
+
+    output = np.zeros(fine.shape)
+    for index,_ in np.ndenumerate(fine):
+        if rate is None:
+            est_rate = Richardson_estimate_rate(coarse[index],mid[index],fine[index])
+        else:
+            est_rate = rate
+        output[index] = Richardson_extrapolation_step(mid[index],fine[index],est_rate)
     return output
 
 

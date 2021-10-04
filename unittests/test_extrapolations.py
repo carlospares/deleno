@@ -199,6 +199,10 @@ class TestExtrapolations(unittest.TestCase):
     def test_extrapolation_vector_fixed_size_Aitken(self):
         self.extrapolation_vector_fixed_size_framework(extr.Aitken_extrapolation_step)
 
+    # def test_extrapolation_vector_fixed_size_cwiseRichardson(self):
+    #     self.extrapolation_vector_fixed_size_framework(
+    #                                     extr.cwiseRichardson_extrapolation_step)
+
     def test_extrapolation_vector_fixed_size_Richardson_osc(self):
         with np.testing.assert_raises(AssertionError):
             self.extrapolation_vector_fixed_size_framework(
@@ -209,6 +213,10 @@ class TestExtrapolations(unittest.TestCase):
 
     def test_extrapolation_vector_fixed_size_Aitken_osc(self):
         self.extrapolation_vector_fixed_size_framework(extr.Aitken_extrapolation_step, osc=True)
+
+    # def test_extrapolation_vector_fixed_size_cwiseRichardson_osc(self):
+    #     self.extrapolation_vector_fixed_size_framework(
+    #                                     extr.cwiseRichardson_extrapolation_step, osc=True)
 
     def test_extrapolation_vector_fixed_size_Richardson_Cn(self):
         with np.testing.assert_raises(AssertionError):
@@ -224,29 +232,71 @@ class TestExtrapolations(unittest.TestCase):
         with np.testing.assert_raises(AssertionError):
             self.extrapolation_vector_fixed_size_framework(extr.Aitken_extrapolation_step, Cn=True)
 
+    # def test_extrapolation_vector_fixed_size_cwiseRichardson_Cn(self):
+    #     self.extrapolation_vector_fixed_size_framework(
+    #                                     extr.cwiseRichardson_extrapolation_step, Cn=True)
 
+    def discontinuous_f_cellavgs(self, x, dx):
+        np.testing.assert_array_less(dx, 1) # otherwise integrals don't work
+        h = dx/2
+
+        return  (1./dx)*( \
+                              (x+h<=0.5)   *-0.5*((x + h)**2 - (x - h)**2) + \
+                    (x-h<0.5)*(x+h>0.5)   *(-0.5*(0.25 - (x - h)**2) \
+                            + (0.3/np.pi)*(-np.cos(10*np.pi*(x + h)) -1)) + \
+                    (x-h>=0.5)*(x+h<=1.5) *(0.3/np.pi)*(-np.cos(10*np.pi*(x + h)) + \
+                                             np.cos(10*np.pi*(x - h))) + \
+                    (x-h<1.5)*(x+h>1.5)*  ((0.3/np.pi)*(1 + np.cos(10*np.pi*(x - h))) + \
+                                            (-20./3)*( (x+h-2)**3 - (-0.5)**3 )) + \
+                    (x-h>=1.5)*(x+h<=2.5) *(-20./3)*( (x+h-2)**3 - (x-h-2)**3 ) + \
+                    (x-h<2.5)*(x+h>2.5)   *((-20./3)*( (0.5)**3 - (x-h-2)**3) + 3*(x+h - 2.5)) + \
+                    (x-h>=2.5)            *3*dx )
+
+    def discontinuous_f(self, x):
+        return  (x<=0.5)*          (-x) + \
+                (x>0.5)*(x<=1.5)*(3*np.sin(10*np.pi*x)) + \
+                (x>1.5)*(x<=2.5)*(-20*(x-2)**2) + \
+                (x>2.5)*3
+
+    def test_f_discont_cellavgs(self):
+        dx = 0.001
+        a = 0
+        b = 3
+        x = np.arange(a + dx/2, b, dx)
+        np.testing.assert_almost_equal(self.discontinuous_f(x),
+                                       self.discontinuous_f_cellavgs(x, dx), decimal=3)
 
     def extrapolation_vector_upscaling_framework(self, algo, name="", order=0, plot_approxs=False,
-                                                 plot_extraps=False, plot_cells=True, 
-                                                 plot_cell_errors=False, plot_global=False):
-        print(name, order)
+                                                 plot_extraps=False, plot_cells=False, 
+                                                 plot_cell_errors=False, plot_global=False,
+                                                 use_discontinuous=False):
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         nc = len(colors)
         
         upscale, nghosts = extr.get_upscale_nghosts_1d(order)
-        f = lambda x, dx: (-np.cos(2*np.pi*(x + dx/2)) + np.cos(2*np.pi*(x - dx/2)))/(dx*2*np.pi)
+        if use_discontinuous:
+            a = 0
+            b = 3
+            f = lambda x, dx: self.discontinuous_f_cellavgs(x, dx)
+            gt = lambda x, dx: self.discontinuous_f(x)
+        else:
+            a = 0
+            b = 1
+            f = lambda x, dx: (-np.cos(2*np.pi*(x + dx/2)) + np.cos(2*np.pi*(x - dx/2)))/(dx*2*np.pi)
+            gt = f
         approxs = []
         Ns = [64, 128, 256, 512, 1024]
 
         N_truth = 2*Ns[-1]
         #compute ground truth:
-        dx = 1./N_truth
-        x_truth = np.arange(dx/2, 1, dx)
-        ground_truth = f(x_truth, dx)
+        dx = (b-a)/N_truth
+        x_truth = np.arange(a + dx/2, b, dx)
+        ground_truth = gt(x_truth, dx)
 
         for N in Ns:
-            dx = 1./N
-            approxs.append( f(np.arange(dx/2, 1, dx), dx) )
+            dx = (b-a)/N
+            x = np.arange(a + dx/2, b, dx)
+            approxs.append( f(x, dx) )
         approxs_upsc = []
         for k,N in enumerate(Ns):
             niters = int(np.log2(N_truth/N))
@@ -265,19 +315,20 @@ class TestExtrapolations(unittest.TestCase):
 
         if plot_approxs:
             for k in range(2, len(Ns)):
-                plt.plot(approxs_upsc[k], "*--", label=f"{Ns[k]}", c=colors[k%nc])
+                plt.plot(x_truth, approxs_upsc[k], "*--", label=f"{Ns[k]}", c=colors[k%nc])
             plt.legend()
             plt.show()
 
         if plot_extraps:
             for k in range(2, len(Ns)):
-                plt.plot(extraps[k-2], "*--", label=f"{Ns[k]}", c=colors[k%nc])
+                plt.plot(x_truth, extraps[k-2], "*--", label=f"{Ns[k]}", c=colors[k%nc])
             plt.legend()
             plt.show()
 
         if plot_cells:
             fig = plt.figure()
-            for i in range(0, int(N_truth/Ns[0]), 2):
+            offset = 1690
+            for i in range(offset, offset + int(N_truth/Ns[0]), 2):
                 plt.plot(np.log2(Ns), [a[i] for a in approxs_upsc], 
                            '-X', c=colors[i%nc])#,label=f"Error cell {i}"
                 plt.plot(np.log2(Ns[2:]), [a[i] for a in extraps], 
@@ -285,8 +336,8 @@ class TestExtrapolations(unittest.TestCase):
                 plt.plot(np.log2(Ns[-1]+50), ground_truth[i], 'o', c=colors[i%nc])
             plt.legend(['real value', 'accelerated', 'ground truth'], loc="upper left")
             plt.grid()
-            ax = fig.gca()
-            ax.set_yticks(np.arange(0, 0.1, 0.005))
+            # ax = fig.gca()
+            # ax.set_yticks(np.arange(0, 0.1, 0.005))
             plt.title(f"{name} ({order})")
             plt.show()
 
@@ -327,6 +378,15 @@ class TestExtrapolations(unittest.TestCase):
                                         extr.Aitken_extrapolation_step, order=0, name="Aitken")
         self.extrapolation_vector_upscaling_framework(
                                         extr.Aitken_extrapolation_step, order=3, name="Aitken")
+
+    def test_extrapolation_scalar_Anderson_disc(self):
+        self.extrapolation_vector_upscaling_framework(
+                                        extr.Anderson_extrapolation_step, order=0, name="Anderson",
+                                        use_discontinuous=True, plot_global=False, plot_cells=False)
+        self.extrapolation_vector_upscaling_framework(
+                                        extr.Anderson_extrapolation_step, order=3, name="Anderson",
+                                        use_discontinuous=True, plot_global=False, plot_cells=False)
+
 
     
 
