@@ -2,7 +2,7 @@ import numpy as np
 from boundary_condition import BoundaryCondition as BC
 
 class Grid:
-    def __init__(self, datashape, nghosts, options=None, limits=[0., 1., 0., 1.]):
+    def __init__(self, datashape, nghosts, options=None, limits=[0., 1., 0., 1.], bcs=None):
         """initializes a grid with basic information"""
 
         # domain limits
@@ -21,7 +21,13 @@ class Grid:
             self.nx = int(datashape[0])
             self.ny = int(datashape[1])
         self.gw = nghosts
-        self.bcs = BC() if options is None else BC(options.bcs)
+
+        # BCs: options has higher precedence over bcs, default otherwise
+        if options is not None:
+            self.bcs = BC(options.bcs)
+        else:
+            self.bcs = BC() if bcs is None else BC(bcs)
+
         self.generate_params()
 
     def generate_params(self):

@@ -5,7 +5,8 @@ class BoundaryCondition:
     AXIS_NS = 0 # along Y axis; one column is data[i,:]
     AXIS_EW = 1 # along X axis; one row is data[:,j]
 
-    BC_PER = 'P'
+    BC_PER = 'P' # periodic. u[0:nghosts] = u[N + 0:nghosts]
+    BC_EXT = 'E' # extend.  u[0:nghosts] = u[nghosts]. Corners ignored.
 
     def __init__(self, bcs=None):
         if bcs is None:
@@ -45,6 +46,13 @@ class BoundaryCondition:
         if bcL == self.BC_PER and bcR == self.BC_PER: # one-sided periodic should be impossible
             data[:nghosts] = data[N:N+nghosts]
             data[N+nghosts:] = data[nghosts: 2*nghosts]
+        
+        if bcL == self.BC_EXT:
+            data[:nghosts] = data[nghosts]
+
+        if bcR == self.BC_EXT:
+            data[N+nghosts:] = data[N+nghosts-1]
+
         else:
             raise Exception("Type of BC not known to apply_bc_1d")
 

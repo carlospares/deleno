@@ -40,7 +40,7 @@ def choose_algorithm(extrap_which):
         raise ValueError(f"Value of extrap_which {extrap_which} unknown.")
 
 
-def iterative_upscale(upscale, data, niters, nghosts):
+def iterative_upscale(upscale, data, niters, nghosts, bcs=None):
     """ iteratively apply upscaling function upscale to data, niters times.
     
     input: data of shape (ncomp, grid.nx, grid.ny) [no ghost cells!]
@@ -49,21 +49,21 @@ def iterative_upscale(upscale, data, niters, nghosts):
     cf get_upscale_nghosts for the shape of function upscale """
     data_upscaled = data
     for i in range(niters):
-        grid = Grid(data_upscaled.shape, nghosts)
+        grid = Grid(data_upscaled.shape, nghosts, bcs=bcs)
         data_upscaled = upscale(grid.bcs.extend_with_bc_2d(data_upscaled, nghosts), grid)
     return data_upscaled
 
-def iterative_upscale_1d(upscale, data, niters, nghosts, direction=BC.AXIS_NS):
+def iterative_upscale_1d(upscale, data, niters, nghosts, direction=BC.AXIS_NS, bcs=None):
     """ iteratively apply upscaling function upscale to data, niters times.
     
-    input: data of shape (ncomp, grid.nx, grid.ny) [no ghost cells!]
-    output: data of shape (ncomp, 2**niters*grid.nx, 2**niters*grid.ny) [no ghost cells!]
+    input: data of length (N) [no ghost cells!]
+    output: data of length (2**niters*N) [no ghost cells!]
     
     cf get_upscale_nghosts_1d for the shape of function upscale """
     data_upscaled = data
     for i in range(niters):
         N = len(data_upscaled)
-        grid = Grid((N,N), nghosts)
+        grid = Grid((N,N), nghosts, bcs=bcs)
         data_upscaled = upscale(grid.bcs.extend_with_bc_1d(data_upscaled, nghosts, direction), grid)
     return data_upscaled
 
