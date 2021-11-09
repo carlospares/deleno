@@ -47,14 +47,14 @@ class BoundaryCondition:
             data[:nghosts] = data[N:N+nghosts]
             data[N+nghosts:] = data[nghosts: 2*nghosts]
         
-        if bcL == self.BC_EXT:
+        elif bcL == self.BC_EXT:
             data[:nghosts] = data[nghosts]
 
-        if bcR == self.BC_EXT:
+        elif bcR == self.BC_EXT:
             data[N+nghosts:] = data[N+nghosts-1]
 
         else:
-            raise Exception("Type of BC not known to apply_bc_1d")
+            raise Exception(f"Type of BC (l={bcL}, r={bcR}) not known to apply_bc_1d")
 
 
     def apply_bc_2d_comp(self, data, nghosts):

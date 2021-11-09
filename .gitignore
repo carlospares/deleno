@@ -1,8 +1,13 @@
 __pycache__
 testall
+runall
+
 *.npy
 *.sublime-project
 *.sublime-workspace
 *.pyc
 
 *.png
+*.ods
+*.csv
+*.pdf

@@ -6,6 +6,7 @@ import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 import extrapolation
 from grid import Grid
+import numbers
 
 def load_data(filename):
     if filename.endswith(".npy"):
@@ -84,7 +85,10 @@ def quick_L1_diff(data1, data2):
 def norm_L2(data):
     """ compute L2 norm of an array, assumed equispaced in [0,1]^2.
     NOTE: if data is a 3d array of ncomp x nx x ny, compute norm of the full array
-    this may or may not be what you want to do, be careful! """
+    this may or may not be what you want to do, be careful!
+    If input is a number, simply return its abs """
+    if isinstance(data, numbers.Number):
+        return abs(data)
     v = 1. / data.shape[-1] / data.shape[-2]
     return np.sqrt(np.sum( np.square(data)) * v) 
 
@@ -127,6 +131,9 @@ def quick_conv_plot(data, options):
     plt.grid(which='minor', linestyle='--', linewidth='0.2')
 
 def compare_to_real(downscaled, options):
+    """
+    Compare ENO-encoded data to real
+    """
     K = len(downscaled)
     k = 1
     keep_going = True 
@@ -153,6 +160,9 @@ def compare_to_real(downscaled, options):
 
 
 def extrapolate_and_compare(options):
+    """
+    Apply (Richardson or other) extrapolation and compare to real data
+    """
     minN = options.minN
     maxN = options.maxN
     gw = options.gw
@@ -186,6 +196,10 @@ def extrapolate_and_compare(options):
             print(f"Component {comp}: well this was pointless. {extrap_error} > {real_error}")
 
 def compare_upscale(options):
+    """
+    Compare the result of upscaling with different order wrt a ground truth
+    """
+    obs = options.observable
     minN = options.minN
     maxN = options.maxN
     nrefs = int(np.log2(maxN/minN))
@@ -198,8 +212,8 @@ def compare_upscale(options):
     else:
         print(f"Loading expressly designated ground truth {options.groundtruth}")
         ground_truth = load_data(options.groundtruth)
-        suffix_gt = "" if options.groundtruth is None else "_gt2048" # TODO generalize if needed
-        tag_gt = " (gt 2048)"
+        suffix_gt = "_gt" # TODO generalize if needed
+        tag_gt = ""
 
     samples = []
     Ns = [minN*(2**k) for k in range(nrefs)]
@@ -224,7 +238,7 @@ def compare_upscale(options):
         for k in range(nrefs):
             upscaled = extrapolation.iterative_upscale(upscale, samples[k], nrefs-k, nghosts)
             upscales[n].append(upscaled)
-            dists[n, k] = norm_L2(upscaled - ground_truth)
+            dists[n, k] = norm_L2(obs(upscaled) - obs(ground_truth))
             if options.extraplots:
                 for comp in range(samples[-1].shape[0]):
                     quick_plot_compare(upscaled[comp], ground_truth[comp])
@@ -241,37 +255,23 @@ def compare_upscale(options):
 
     plt.clf()
     # plot relative errors
-    print(norm_L2(ground_truth))
     for n, p in enumerate(ps):
         label = f"ENO{p}" if p > 0 else "Trivial"
-        plt.loglog(Ns, 100*dists[n,:]/norm_L2(ground_truth), '*-', base=10, label=label)
+        plt.loglog(Ns, 100*dists[n,:]/norm_L2(obs(ground_truth)), '*-', base=10, label=label)
     plt.legend()
     plt.grid("minor")
     plt.title(f"Rel. error: {options.comment}{tag_gt}")
     plt.ylabel("% of ground truth")
     plt.savefig(f"{options.prefix}_upscale_rel{suffix_gt}")
 
-    # # test differences to trivial
-    # # this is (as expected) absolute nonsense
-    # plt.clf()
-    # dist_to_triv = np.zeros((len(ps), nrefs))
-    # for n in range(1, len(ps)):
-    #     if ps[0] != 0:
-    #         print(f"ps[0] = {ps[0]}. We assume here ps[0]=0, output labels won't be accurate.")
-    #     p = ps[n]
-    #     for k in range(nrefs):
-    #         dist_to_triv[n, k] = norm_L2(upscales[n][k] - upscales[0][k])
-    #     label = f"ENO{p}"
-    #     plt.loglog(Ns, 100*dist_to_triv[n,:], '*-', base=2, label=label)
-    # plt.legend()
-    # plt.grid("minor")
-    # plt.title(f"Distance to trivial upscaling: {options.comment}")
-    # plt.ylabel("L2 dist")
-    # plt.savefig(f"{options.prefix}_disttriv")
-
 
 
 def check_regularity(options):
+    """
+    Compare regularity of functions by measuring the L2 norm of the discrete gradient.
+    For smooth functions, it should approach the real limit. For irregular functions,
+    it may blow up.
+    """
     minN = options.minN
     maxN = options.maxN
     nrefs = int(np.log2(maxN/minN))

@@ -7,9 +7,6 @@ import eno_tools as eno
 
 import matplotlib.pyplot as plt
 
-# ALGO = 0
-# NAME = 1
-
 class TestExtrapolations(unittest.TestCase):
 
     def test_iterative_upscale_trivial_1d_fv(self):

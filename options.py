@@ -1,6 +1,7 @@
 import argparse
 from extrapolation import extrap_dict
 import sys
+from observables import observables_factory
 
 STAGGERED = 0
 FV = 1
@@ -48,6 +49,8 @@ class Options:
                                 help='If available, compute more plots along the way')
         parser.add_argument('-gt', '--groundtruth', type=str, required=False,
                                 help='If present, take as ground truth wherever needed')
+        parser.add_argument('-obs', '--observable', type=str, required=False, default="identity",
+                                help="Observable for which to observe statistics (default: id.)")
         args = parser.parse_args()
         self.name = args.name
         self.minN = args.minN
@@ -73,6 +76,7 @@ class Options:
                 print(f"Type of extrapolation {args.extrapolate} not known!")
                 print(f"Please choose one of the following: {[k for k in extrap_dict.keys()]}")
                 sys.exit(1)
+        self.observable = observables_factory(args.observable)
 
         if args.gridtype.lower() == "staggered":
             self.grid = STAGGERED
