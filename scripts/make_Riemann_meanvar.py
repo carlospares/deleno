@@ -6,6 +6,7 @@ import extrapolation as extrap
 import sys
 import matplotlib.pyplot as plt
 from scipy.special import erf
+import pickle
 
 A = -2.5           # interval left
 B = 2.5            # interval right
@@ -24,6 +25,14 @@ elif JUMP_DISTRIB == "normal":
     JUMP_VAR = 0.1
 PEEK_PLOTS = False
 tag = f"_{JUMP_DISTRIB}"
+
+# parameters for structure functions:
+COMPUTE_STR_FCT = True
+A_PRIME = -2
+B_PRIME =  2 # compute str fcts only in [A', B']
+MAX_R = 0.5  # compute only str fcts for r <= MAX_R
+MIN_R = 0    # limit strfct computation to r >= MIN_R (r >= (B-A)/N regardless)
+STR_PS = [1,2,3]
 
 
 
@@ -155,15 +164,41 @@ def exact_var(x):
         exact_vars[i] = (indef_int(xR) - indef_int(xL))/(xR - xL)
     return exact_vars
 
+def exact_strfct(r, p):
+    return np.abs(UR-UL)*(r/2)**(1./p)
+
 def norm_L2(data, dx):
     return np.sqrt(np.sum( np.square(data)) * dx) 
 
-def make_meanvar(N,M):
+
+def struct_fct_of_sample(u, x, p):
+    if len(u) != len(x)-1:
+        print(f"{len(u)}, {len(x)}")
+        raise ValueError("len(u) must be == len(x)-1!")
+    idxStart = np.argmax(x>A_PRIME)
+    idxEnd = np.argmax(x>B_PRIME)
+    dx = x[1]-x[0]
+    maxSteps = int(MAX_R/dx)
+    minSteps = max(1, int(MIN_R/dx)) # consider offsets in [minSteps, minSteps+1, ..., maxSteps]
+    rs = np.zeros(maxSteps - minSteps + 1) # rs[i] = (minR+i)*dx
+    structs = np.zeros(maxSteps - minSteps + 1) # structs[i] = struct.funct.(rs[i])
+    for ndx in range(minSteps, maxSteps + 1):
+        rs[ndx-minSteps] = ndx*dx
+        for idx in range(idxStart, idxEnd):
+            structs[ndx-minSteps] += np.average( np.abs(u[idx-ndx : idx+ndx+1] - u[idx])**p )
+    structs *= dx
+    return rs, structs
+        
+
+
+def make_meanvar_and_structfct(N,M,Ps=[]):
     realization_fv = np.zeros(N)
     x = np.linspace(A,B,N+1)
     average = np.zeros(N)
     M2 = np.zeros(N)
     delta = np.zeros(N)
+    dict_structs = {}
+    rs = None
     for m in range(M):
         jump_location = random_jump_location()
         make_init_state(x, realization_fv, jump_location)
@@ -171,7 +206,40 @@ def make_meanvar(N,M):
         average += delta/(m+1)
         delta2 = realization_fv - average
         M2 += delta*delta2
-    return (average, M2/(M-1))
+
+        if COMPUTE_STR_FCT and len(Ps)>0:
+            if m == 0:
+                rs, structs_first = struct_fct_of_sample(realization_fv, x, Ps[0])
+                dict_structs[Ps[0]] = structs_first
+                for p in Ps[1:]:
+                    dict_structs[p] = struct_fct_of_sample(realization_fv, x, p)[1]
+            else:
+                for p in Ps:
+                    dict_structs[p] += struct_fct_of_sample(realization_fv, x, p)[1]
+
+    for p in Ps:
+        dict_structs[p] = (dict_structs[p]/M)**(1./p)    
+
+    return (average, M2/(M-1), dict_structs, rs)
+
+def plot_str_fcts(Ns, Ms, dict_rs, dict_strfcts, Ps):
+    if rs is None:
+        return
+    
+    outfile = f"output/strfct_Riemann_N{Ns[0]}-{Ns[-1]}_M{Ms[0]}-{Ms[-1]}"
+    pickle.dump((Ns, Ms, dict_rs, dict_strfcts, Ps), open(outfile, 'wb'))
+    for p in Ps:
+        plt.clf()
+        for N in Ns: #[Ns[0], Ns[-1]]:
+            for M in [Ms[0], Ms[-1]]: #Ms
+                plt.loglog(dict_rs[(N,M)], dict_strfcts[(N,M)][p], '*-', label=f"({N},{M})", base=2)
+        sample_r = dict_rs[(Ns[-1], Ms[-1])]
+        plt.loglog(sample_r, exact_strfct(sample_r, p), '--', label="exact")
+        plt.legend()
+        plt.grid()
+        plt.title(f"{p}-str. fct. at (#cells, #samples)")
+        plt.savefig(f"strfct_Riemann_p{p}_N{Ns[0]}-{Ns[-1]}_M{Ms[0]}-{Ms[-1]}", bbox_inches="tight")
+
 
 def peek_mean_var(x, xgt, mean, mean_up, gt_mean, var, var_up, gt_var, M, N):
     plt.clf()
@@ -196,8 +264,10 @@ def peek_mean_var(x, xgt, mean, mean_up, gt_mean, var, var_up, gt_var, M, N):
     plt.legend()
     plt.show()
 
-expsN = range(6,13)
-expsM = range(6,15)
+expsN = range(6,11)
+expsM = range(6,12)
+# expsN = range(6, 10)
+# expsM = range(6, 10)
 Ns = [2**exp for exp in expsN]
 Ms = [2**exp for exp in expsM]
 
@@ -213,7 +283,7 @@ if UPSCALE_ORDER>=0:
     if IS_REF_4096:
         xgt = np.linspace(A, B, 4097)
         print("Preparing ground truth...")
-        base_gt_mean, base_gt_var = make_meanvar(4096, 4096)
+        base_gt_mean, base_gt_var, base_gt_strfct, base_gt_rs = make_meanvar_and_structfct(4096, 4096, STR_PS)
         print("Ready!")
     else:
         xgt = np.linspace(A, B, N_truth+1)
@@ -225,6 +295,8 @@ nNs = len(Ns)
 nMs = len(Ms)
 mean_rel = np.zeros((nNs, nMs))
 var_rel = np.zeros((nNs, nMs))
+dict_strfcts = {}
+dict_rs = {}
 
 for l,N in enumerate(Ns):
     x = np.linspace(A,B,N+1)
@@ -240,7 +312,7 @@ for l,N in enumerate(Ns):
     for k,M in enumerate(Ms):
         print(f"N={N}, M={M}")
         
-        mean,var = make_meanvar(N,M)
+        mean, var, strfcts, rs = make_meanvar_and_structfct(N,M, STR_PS)
 
         if UPSCALE_ORDER>=0:
             mean_up = extrap.iterative_upscale_1d(upscale, mean, niters, 
@@ -252,6 +324,10 @@ for l,N in enumerate(Ns):
             var_up  = var
         mean_rel[l,k] = norm_L2(mean_up-gt_mean, dx) / norm_L2(gt_mean, dx)
         var_rel[l,k]  = norm_L2(var_up-gt_var, dx) / norm_L2(gt_var, dx)
+
+        if COMPUTE_STR_FCT:
+            dict_rs[(N,M)] = rs
+            dict_strfcts[(N,M)] = strfcts
 
         if PEEK_PLOTS and M == Ms[-1]:
             peek_mean_var(x, xgt, mean, mean_up, gt_mean, var, var_up, gt_var, M, N)
@@ -278,3 +354,6 @@ with open(OUTFILE, 'w') as csvfile:
         for k, M in enumerate(Ms):
             row[k+1] = str(100*round(var_rel[l, k], 5))
         writer.writerow(row)
+
+if COMPUTE_STR_FCT:
+    plot_str_fcts(Ns, Ms, dict_rs, dict_strfcts, STR_PS)

@@ -4,8 +4,8 @@ import sys
 import matplotlib.pyplot as plt
 from scipy.special import erf
 
-A = -0.5*np.pi           # random offset lower bound
-B =  0.5*np.pi           # random offset higher bound
+A = -np.pi           # random offset lower bound
+B =  np.pi           # random offset higher bound
 SEED = 112358      # numpy.random seed for reproducibility
 
 def unif(a,b):
@@ -47,8 +47,8 @@ def make_meanvar(N,M):
     return (average, M2/(M-1))
 
 
-M = 10000
-N = 1024
+M = 1024
+N = 64
 
 average,var = make_meanvar(N,M)
 
@@ -78,4 +78,16 @@ plt.subplot(326)
 plt.contourf(x,y,var- exact_var(x,y))
 plt.colorbar()
 
+plt.show()
+
+plt.close('all')
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(x,y,average)
+plt.show()
+
+plt.close('all')
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(x,y,var)
 plt.show()

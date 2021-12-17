@@ -1,11 +1,11 @@
-N = 9; % Number of points in the stencil
+N = 3; % Number of points in the stencil
 %left = 2; % Offset of leftmost point in the stencil wrt cell i (stencil: i-l ... i+r)
 for k = 1:2
     coefs = '[';
     for left = 0:(N-1)
         right = left + N - 1;
         % idx = left:right;
-        dx = 0.1; % final result is dx-independent but removing it from the equations is a hassle
+        dx = 1; % fairly sure this cancels out -- dx^(p-1) multiplies LHS and RHS of row p
 
         A = zeros(N);
         for j = 1:N
