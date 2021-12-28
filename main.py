@@ -25,12 +25,17 @@ if options.compare:
 if options.details:
     # examine size of details
     details_L1size = []
+    fine = dh.load_data(options.name)
+    dh.quick_plot(fine[0], remove_ghost=options.gw)
+    dh.save_plot("fine", options)
+    dh.quick_plot(f0, remove_ghost=options.gw)
+    dh.save_plot("base", options)
     for k, d in enumerate(dhats):
-        dh.quick_plot(d)
+        dh.quick_plot(d, remove_ghost=options.gw)
         dh.save_plot(str(k), options)
         plt.clf()
         details_L1size.append(np.sum(np.abs(d))/ ((options.minN*(2**(k+1))))**2 )
-    dh.quick_conv_plot(details_L1size, options)
+    dh.quick_conv_plot(details_L1size, options, title="L1 norm of details")
     dh.save_plot("details_L1", options)
 
 if options.extrapolate:

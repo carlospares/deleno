@@ -65,15 +65,17 @@ def load_vtk(filename):
 
 def save_plot(name, options=None):
     if options is not None:
-        prefix = options.prefix + "_"
+        prefix = str(options.prefix or '') + "_"
     else:
         prefix = ""
     plt.savefig("figs/" + prefix + name)
     plt.close()
 
 
-def quick_plot(data):
-    plt.contourf(data, 20)
+def quick_plot(data, remove_ghost=0):
+    if len(data.shape) == 3:
+        data = data[0]
+    plt.contourf(data[remove_ghost:-remove_ghost, remove_ghost:-remove_ghost], 20)
     plt.colorbar()
 
 def quick_L1_diff(data1, data2):
@@ -114,21 +116,25 @@ def quick_plot_compare(data1, data2):
     plt.contourf(data1-data2, 20)
     plt.colorbar()
 
-def quick_conv_plot(data, options):
+def quick_conv_plot(data, options, title=None):
     if options is not None:
         Ns = options.maxN / np.flip(2**np.arange(len(data)))
     else:
         Ns = 2**np.arange(len(data))
-    plt.loglog(Ns, data)
+    plt.loglog(Ns, data, '*-', base=2)
 
     z = np.polyfit(np.log(Ns), np.log(data), 1)
     z = z[0].round(2)
     C = data[-1] * Ns[-1]**(-z)
-    plt.loglog(Ns, [ C* N**z for N in Ns ], '--', label="N^{}".format(z))
+    plt.loglog(Ns, [ C* N**z for N in Ns ], '--', label="N^{}".format(z), base=2)
     plt.legend()
 
     plt.grid(which='major', linestyle='-')
     plt.grid(which='minor', linestyle='--', linewidth='0.2')
+
+    plt.xlabel("N")
+    if title is not None:
+        plt.title(title)
 
 def compare_to_real(downscaled, options):
     """
@@ -306,7 +312,7 @@ def check_regularity(options):
         plt.plot([6, 10], [lowgrad, highgrad], '--', c=colors[comp], label=f"Slope: {slope} (norm. {slopenorm})")
     plt.xlabel("log2(N)")
     plt.ylabel("Norm of gradient")
-    tag = "" if options.prefix is None else f"({options.prefix})"
+    tag = "" if options.prefix is "" else f"({options.prefix})"
     plt.title(f"Norm of FD gradient {tag}")
     plt.legend()
     axes = plt.gca()

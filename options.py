@@ -8,9 +8,9 @@ FV = 1
 
 class Options:
 
-    def is_grid_staggered():
+    def is_grid_staggered(self):
         return self.grid == STAGGERED
-    def is_grid_fv():
+    def is_grid_fv(self):
         return self.grid == FV
 
     def __init__(self):
